@@ -957,7 +957,7 @@ function SettingsTab({
             <p className="settings-row__label">About DocRisk</p>
             <p className="settings-row__sub">
               AI-powered fraud detection for Sri Lankan documents. Analyzes job offers,
-              land deeds, visas, and more using Gemini 1.5 Flash.
+              land deeds, visas, and more using Gemini 2.5 Flash.
             </p>
           </div>
         </div>

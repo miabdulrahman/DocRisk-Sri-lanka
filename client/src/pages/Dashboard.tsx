@@ -120,7 +120,7 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
         <div className="hero">
           <div className="hero-eyebrow">
             <span className="hero-dot" />
-            Powered by Gemini 1.5 Flash
+            Powered by Gemini 2.5 Flash
           </div>
           <h1 className="hero-heading">
             Detect Document<br />
@@ -132,7 +132,7 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
           </p>
           <div className="hero-chips">
             {[
-              { icon: <Zap size={13} />, label: 'Gemini AI' },
+              { icon: <Zap size={13} />, label: 'Gemini 2.5' },
               { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
               { icon: <FileText size={13} />, label: 'PDF · JPG · PNG' },
               { icon: <Upload size={13} />, label: 'Max 10 MB' },

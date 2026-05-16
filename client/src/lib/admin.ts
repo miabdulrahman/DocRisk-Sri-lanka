@@ -1,10 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore'
 import type { AdminStatsResponse } from '../types'
+import { getApiBase } from './apiBase'
 import { db } from './firebase'
-
-export const API_BASE = (
-  import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
-).replace(/\/api\/analyze\/?$/, '') || 'http://localhost:4000'
 
 export async function checkIsAdmin(uid: string): Promise<boolean> {
   if (!db) return false
@@ -20,8 +17,25 @@ export async function checkIsAdmin(uid: string): Promise<boolean> {
 }
 
 export async function fetchAdminStats(token: string): Promise<AdminStatsResponse> {
-  const res = await fetch(`${API_BASE}/api/admin/stats`, {
+  const url = `${getApiBase()}/api/admin/stats`
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
+
+  if (!res.ok) {
+    const text = await res.text()
+    let message = `Server error (${res.status})`
+    try {
+      const json = JSON.parse(text) as { error?: string }
+      if (json.error) message = json.error
+    } catch {
+      if (text.includes('Cannot GET')) {
+        message =
+          'Admin API not found. Restart the backend server (npm run dev from project root).'
+      }
+    }
+    throw new Error(message)
+  }
+
   return res.json() as Promise<AdminStatsResponse>
 }
