@@ -2219,6 +2219,36 @@
   }
 }
 
+.scam-alert-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.scam-alert-status--error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--risk-high) 35%, transparent);
+  background: color-mix(in srgb, var(--risk-high) 8%, transparent);
+  color: var(--text);
+}
+
+.scam-alert-retry {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
    PLACEHOLDER TABS
 ══════════════════════════════════════════════════════════════════════════════ */

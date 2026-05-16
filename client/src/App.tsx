@@ -51,7 +51,8 @@ import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
 import { getApiBase } from './lib/apiBase'
 import { ScamCard } from './components/ScamCard'
 import { ScamChatModal } from './components/ScamChatModal'
-import { SCAMS, type ScamEntry } from './utils/scamData'
+import type { ScamEntry } from './utils/scamData'
+import { useOfficialScams } from './hooks/useOfficialScams'
 import { useUserAnalyses } from './hooks/useUserAnalyses'
 import { summarizeAnalyses } from './lib/userAnalyses'
 import type { AnalysisResult, ExtractedData, OutputLang, RiskLevel, TamperBox } from './types'
@@ -608,6 +609,7 @@ function AnalyzeTab({ user }: { user: User }) {
   const [analysis, setAnalysis] = useState<AnalysisCompletePayload | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedScam, setSelectedScam] = useState<ScamEntry | null>(null)
+  const { scams, loading: scamsLoading, error: scamsError, sources, reload: reloadScams } = useOfficialScams()
 
   const clearAnalysis = () => {
     setAnalysis(null)
@@ -650,12 +652,35 @@ function AnalyzeTab({ user }: { user: User }) {
                 <AlertTriangle size={15} />
               </div>
               <div>
-                <h2 className="scam-alert-header__title">Trending Scams in Sri Lanka</h2>
-                <p className="scam-alert-header__sub">Current active fraud schemes — click any card to learn more and chat with an AI expert</p>
+                <h2 className="scam-alert-header__title">Official Scam Advisories — Sri Lanka</h2>
+                <p className="scam-alert-header__sub">
+                  Live from{' '}
+                  {sources.length > 0 ? sources.join(' & ') : 'SLCERT & Sri Lanka Police'}
+                  {' '}— click a card to learn more or chat with an AI expert
+                </p>
               </div>
             </div>
+
+            {scamsLoading && (
+              <p className="scam-alert-status" role="status">Loading official advisories…</p>
+            )}
+
+            {!scamsLoading && scamsError && (
+              <div className="scam-alert-status scam-alert-status--error" role="alert">
+                <p>{scamsError}</p>
+                <button type="button" className="scam-alert-retry" onClick={() => void reloadScams(true)}>
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!scamsLoading && !scamsError && scams.length === 0 && (
+              <p className="scam-alert-status">No official advisories available right now.</p>
+            )}
+
+            {!scamsLoading && scams.length > 0 && (
             <div className="scam-alert-grid">
-              {SCAMS.map((scam, i) => (
+              {scams.map((scam, i) => (
                 <ScamCard
                   key={scam.id}
                   scam={scam}
@@ -664,6 +689,7 @@ function AnalyzeTab({ user }: { user: User }) {
                 />
               ))}
             </div>
+            )}
           </section>
         )}
       </div>

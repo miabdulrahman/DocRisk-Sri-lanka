@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bot, MessageCircle, Send, User, X } from 'lucide-react'
 import type { ScamEntry } from '../utils/scamData'
 import { getApiBase } from '../lib/apiBase'
+import './ScamCard.css'
 import './ScamChatModal.css'
 
 interface ChatMessage {
@@ -163,6 +164,7 @@ export function ScamChatModal({ scam, onClose }: Props) {
               <h2 id="scam-modal-title" className="scam-modal__title">{scam.title}</h2>
               <div className="scam-modal__title-meta">
                 <span className="scam-category-badge">{scam.category}</span>
+                <span className="scam-source-badge">{scam.source}</span>
                 <span className={severityClass}>{scam.severity}</span>
               </div>
             </div>
@@ -177,8 +179,16 @@ export function ScamChatModal({ scam, onClose }: Props) {
 
           {/* Explanation Panel */}
           <div className="scam-modal__explain">
-            <p className="scam-modal__section-label">Scam Overview</p>
+            <p className="scam-modal__section-label">Official advisory overview</p>
             <p className="scam-modal__explain-text">{scam.explanation}</p>
+            <a
+              className="scam-modal__official-link"
+              href={scam.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on {scam.source} website →
+            </a>
           </div>
 
           {/* Chat Panel */}

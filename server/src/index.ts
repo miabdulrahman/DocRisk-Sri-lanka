@@ -1,11 +1,12 @@
 import "./loadEnv.js";
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { GoogleGenAI } from "@google/genai";
 import { registerAdminRoutes } from "./routes/admin.js";
 import analyzeRouter from "./routes/analyze.js";
+import trendingScamsRouter from "./routes/trendingScams.js";
 import { initFirebaseAdmin, isFirebaseAuthRequired } from "./firebaseAdmin.js";
 
 const AUDIO_MIME_TYPES = new Set(["audio/mpeg", "audio/wav", "audio/mp3", "audio/x-wav", "audio/wave"]);
@@ -38,15 +39,25 @@ initFirebaseAdmin();
 app.use(cors());
 app.use(express.json());
 
-app.use(
-  rateLimit({
+function createApiLimiter() {
+  const enabled =
+    process.env.RATE_LIMIT_ENABLED === "true" ||
+    (process.env.RATE_LIMIT_ENABLED !== "false" && process.env.NODE_ENV === "production");
+
+  if (!enabled) {
+    return (_req: Request, _res: Response, next: NextFunction) => next();
+  }
+
+  return rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: Number(process.env.RATE_LIMIT_MAX) || 30,
+    max: Number(process.env.RATE_LIMIT_MAX) || 60,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: "Too many requests. Please try again later." },
-  }),
-);
+  });
+}
+
+const apiLimiter = createApiLimiter();
 
 function buildExpertTranscript(
   history: Array<{ role?: string; parts?: Array<{ text?: string }> }>,
@@ -78,10 +89,12 @@ app.get("/api/health", (_req: Request, res: Response) => {
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     geminiModel,
     firebaseAuth: isFirebaseAuthRequired(),
+    trendingScams: true,
   });
 });
 
-app.use("/api/analyze", analyzeRouter);
+app.use("/api/trending-scams", trendingScamsRouter);
+app.use("/api/analyze", apiLimiter, analyzeRouter);
 registerAdminRoutes(app);
 
 function stripJsonFences(raw: string): string {
@@ -119,6 +132,7 @@ Respond ONLY with a single JSON object that strictly matches this schema (no mar
 
 app.post(
   "/api/analyze-audio",
+  apiLimiter,
   (req: Request, res: Response, next) => {
     audioUpload.single("audio")(req, res, (err: unknown) => {
       if (err instanceof multer.MulterError) {
@@ -257,7 +271,7 @@ app.post(
   },
 );
 
-app.post("/api/chat-with-expert", async (req: Request, res: Response) => {
+app.post("/api/chat-with-expert", apiLimiter, async (req: Request, res: Response) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
@@ -323,9 +337,17 @@ Provide concise, professional advice focused on preventing financial loss and un
     return res.json({ success: true, reply });
   } catch (error) {
     console.error("Chat Expert Error:", error);
-    const messageText =
-      error instanceof Error ? error.message : "Internal Server Error";
-    return res.status(500).json({ success: false, error: messageText });
+    const raw = error instanceof Error ? error.message : "Internal Server Error";
+    let friendly = raw;
+    if (raw.includes("CONSUMER_SUSPENDED") || raw.includes("has been suspended")) {
+      friendly =
+        "The Gemini API key has been suspended by Google. Generate a new key at https://aistudio.google.com/app/apikey and update GEMINI_API_KEY in server/.env, then restart the server.";
+    } else if (raw.includes("PERMISSION_DENIED") || raw.includes("API_KEY_INVALID")) {
+      friendly = "Gemini rejected the API key (permission denied / invalid key). Check GEMINI_API_KEY in server/.env.";
+    } else if (raw.includes("RESOURCE_EXHAUSTED") || raw.includes("quota")) {
+      friendly = "Gemini quota exhausted for this API key. Try again later or use a different key.";
+    }
+    return res.status(500).json({ success: false, error: friendly });
   }
 });
 
