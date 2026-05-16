@@ -15,6 +15,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
+const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 if (!process.env.GEMINI_API_KEY) {
   console.warn(
@@ -75,43 +76,113 @@ function stripJsonFences(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
 }
 
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (ch === "\\") {
+        isEscaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") depth += 1;
+    if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseAiJson(text: string) {
+  const cleaned = stripJsonFences(text);
+  const candidates = [cleaned];
+  const extracted = extractFirstJsonObject(cleaned);
+  if (extracted) {
+    candidates.push(extracted);
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  throw new Error(
+    "AI returned invalid JSON. Please try again with a clearer document image."
+  );
+}
+
 async function analyzeDocument(fileBase64: string, mimeType: string) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Server is missing GEMINI_API_KEY. Check server/.env");
   }
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: geminiModel });
 
-  const result = await model.generateContent({
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { data: fileBase64, mimeType } },
-          { text: SYSTEM_PROMPT },
-        ],
+  let result;
+  try {
+    result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { data: fileBase64, mimeType } },
+            { text: SYSTEM_PROMPT },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.0,
+        maxOutputTokens: 600,
+        responseMimeType: "application/json",
       },
-    ],
-    generationConfig: {
-      temperature: 0.0,
-      maxOutputTokens: 600,
-    },
-  });
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("404 Not Found") || message.includes("is not found")) {
+      throw new Error(
+        `Configured Gemini model "${geminiModel}" was not found. Set GEMINI_MODEL in server/.env to a supported model (for example: gemini-2.5-flash).`
+      );
+    }
+    throw error;
+  }
 
-  const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = stripJsonFences(text);
+  const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .map((part) => ("text" in part && typeof part.text === "string" ? part.text : ""))
+    .join("\n")
+    .trim();
 
-  if (!cleaned) {
+  if (!text) {
     throw new Error("AI returned an empty response. Please try again.");
   }
 
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error(
-      "AI returned invalid JSON. Please try again with a clearer document image."
-    );
-  }
+  return parseAiJson(text);
 }
 
 const upload = multer({
@@ -130,6 +201,7 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    geminiModel,
     firebaseAuth: isFirebaseAuthRequired(),
   });
 });
@@ -184,6 +256,73 @@ app.post("/api/analyze", upload.single("document"), async (req, res) => {
   }
 });
 
+app.post("/api/chat-with-expert", async (req, res) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, error: "Server is missing GEMINI_API_KEY." });
+    }
+
+    const { scamTitle, scamExplanation, message, history } = req.body as {
+      scamTitle?: string;
+      scamExplanation?: string;
+      message?: string;
+      history?: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }>;
+    };
+
+    if (!message?.trim() || !scamTitle) {
+      return res.status(400).json({ success: false, error: "Missing required fields: scamTitle and message." });
+    }
+
+    const systemInstruction = `You are an expert Sri Lankan cybersecurity risk analyst at DocRisk. The user is asking about the following specific scam currently active in Sri Lanka:
+
+Title: ${scamTitle}
+Details: ${scamExplanation ?? "No additional details provided."}
+
+Provide concise, professional advice focused on preventing financial loss and understanding the local context. Do not provide legal advice, but guide users to proper Sri Lankan authorities (such as the CID Cybercrime Division, SLCERT at info@cert.gov.lk, the Securities and Exchange Commission, or the SLBFE) when relevant. Keep responses brief and actionable. If the user writes in Sinhala or Tamil, reply in that language. Do not fabricate statistics or news — only rely on the scam details provided above.`;
+
+    const chatModel = genAI.getGenerativeModel({
+      model: geminiModel,
+      systemInstruction,
+    });
+
+    const contents = [
+      ...(history ?? []),
+      { role: "user" as const, parts: [{ text: message.trim() }] },
+    ];
+
+    let result;
+    try {
+      result = await chatModel.generateContent({
+        contents,
+        generationConfig: { temperature: 0.65, maxOutputTokens: 450 },
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("404 Not Found") || msg.includes("is not found")) {
+        throw new Error(`Configured Gemini model "${geminiModel}" was not found. Update GEMINI_MODEL in server/.env.`);
+      }
+      throw error;
+    }
+
+    const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+    const reply = parts
+      .map((p) => ("text" in p && typeof p.text === "string" ? p.text : ""))
+      .join("")
+      .trim();
+
+    if (!reply) {
+      return res.status(500).json({ success: false, error: "AI returned an empty response. Please try again." });
+    }
+
+    return res.json({ success: true, reply });
+  } catch (error) {
+    console.error("Chat Expert Error:", error);
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return res.status(500).json({ success: false, error: message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
+  console.log(`Gemini model: ${geminiModel}`);
 });
