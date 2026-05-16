@@ -55,7 +55,25 @@ if (!process.env.GEMINI_API_KEY) {
 
 initFirebaseAdmin();
 
-app.use(cors());
+const corsAllowlist = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (corsAllowlist.length === 0) return cb(null, true);
+      if (corsAllowlist.includes(origin)) return cb(null, true);
+      if (corsAllowlist.includes("*.vercel.app") && /\.vercel\.app$/i.test(new URL(origin).hostname)) {
+        return cb(null, true);
+      }
+      return cb(new Error(`CORS blocked for origin ${origin}`));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "15mb" }));
 
 function createApiLimiter() {
