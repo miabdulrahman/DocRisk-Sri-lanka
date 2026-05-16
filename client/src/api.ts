@@ -1,7 +1,7 @@
 import type { AnalyzeApiResponse } from './types'
+import { getApiBase } from './lib/apiBase'
 
-export const API_URL =
-  import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
+export const API_URL = `${getApiBase()}/api/analyze`
 
 export async function analyzeDocument(
   file: File,
