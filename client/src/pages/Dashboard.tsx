@@ -6,17 +6,13 @@ import { saveAnalysisToFirestore } from '../lib/saveAnalysis'
 import type { AnalysisResult, OutputLang } from '../types'
 
 const MAX_BYTES = 10 * 1024 * 1024
-const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png'] as const
+
+type FileCategory = '' | 'pdf' | 'image' | 'docx'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-function isAcceptedFile(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return ACCEPTED_EXT.some((ext) => name.endsWith(ext))
 }
 
 export type AnalysisCompletePayload = {
@@ -37,6 +33,7 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState<File | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<FileCategory>('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -54,11 +51,25 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
     return () => URL.revokeObjectURL(url)
   }, [file])
 
-  const validateAndSetFile = useCallback((next: File) => {
+  const validateAndSetFile = useCallback((next: File, category: FileCategory) => {
     setFileError(null)
     setError(null)
-    if (!isAcceptedFile(next)) {
-      setFileError('Please upload a PDF, JPG, JPEG, or PNG file.')
+    
+    if (!category) {
+      setFileError('Please select a document type first.')
+      return
+    }
+
+    const name = next.name.toLowerCase()
+    let isValid = false
+    
+    if (category === 'pdf' && name.endsWith('.pdf')) isValid = true
+    else if (category === 'image' && (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png'))) isValid = true
+    else if (category === 'docx' && name.endsWith('.docx')) isValid = true
+
+    if (!isValid) {
+      const typeName = category === 'pdf' ? 'PDF' : category === 'image' ? 'Image (JPG/PNG)' : 'Word Document (DOCX)'
+      setFileError(`Please upload a valid ${typeName} file.`)
       return
     }
     if (next.size > MAX_BYTES) {
@@ -78,8 +89,12 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+    if (!selectedCategory) {
+      setFileError('Please select a document type first.')
+      return
+    }
     const dropped = e.dataTransfer.files[0]
-    if (dropped) validateAndSetFile(dropped)
+    if (dropped) validateAndSetFile(dropped, selectedCategory)
   }
 
   const onAnalyze = async () => {
@@ -114,6 +129,13 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
     }
   }
 
+  const getAcceptString = () => {
+    if (selectedCategory === 'pdf') return '.pdf'
+    if (selectedCategory === 'image') return '.jpg,.jpeg,.png'
+    if (selectedCategory === 'docx') return '.docx'
+    return ''
+  }
+
   return (
     <>
       {!file && (
@@ -134,7 +156,7 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
             {[
               { icon: <Zap size={13} />, label: 'Gemini 2.5' },
               { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
-              { icon: <FileText size={13} />, label: 'PDF · JPG · PNG' },
+              { icon: <FileText size={13} />, label: 'PDF · JPG · PNG · DOCX' },
               { icon: <Upload size={13} />, label: 'Max 10 MB' },
             ].map((chip, i) => (
               <span
@@ -151,35 +173,87 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
       )}
 
       {!file && (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <label htmlFor="file-type" style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>
+            1. Select Document Type
+          </label>
+          <select 
+            id="file-type" 
+            value={selectedCategory} 
+            onChange={(e) => {
+              setSelectedCategory(e.target.value as FileCategory)
+              setFileError(null)
+            }}
+            style={{ 
+              padding: '0.75rem 1rem', 
+              borderRadius: '8px', 
+              border: '1px solid var(--border)',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--text)',
+              fontSize: '1rem',
+              width: '100%',
+              maxWidth: '300px',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="" disabled>-- Choose Type --</option>
+            <option value="pdf">PDF Document (.pdf)</option>
+            <option value="image">Image (.jpg, .png)</option>
+            <option value="docx">Word Document (.docx)</option>
+          </select>
+        </div>
+      )}
+
+      {!file && (
         <div
-          className={`dropzone${dragOver ? ' drag-over' : ''}`}
+          className={`dropzone${dragOver ? ' drag-over' : ''}${!selectedCategory ? ' disabled' : ''}`}
+          style={{ 
+            opacity: !selectedCategory ? 0.5 : 1, 
+            cursor: !selectedCategory ? 'not-allowed' : 'pointer' 
+          }}
           onDragOver={(e) => {
             e.preventDefault()
-            setDragOver(true)
+            if (selectedCategory) setDragOver(true)
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => {
+            if (!selectedCategory) {
+              setFileError('Please select a document type first.')
+              return
+            }
+            inputRef.current?.click()
+          }}
           onKeyDown={(e) => {
+            if (!selectedCategory) return
             if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
           }}
           role="button"
-          tabIndex={0}
+          tabIndex={selectedCategory ? 0 : -1}
         >
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
+            accept={getAcceptString()}
+            disabled={!selectedCategory}
             onChange={(e) => {
               const f = e.target.files?.[0]
-              if (f) validateAndSetFile(f)
+              if (f) validateAndSetFile(f, selectedCategory)
             }}
           />
           <div className="dropzone-icon-wrap">
             <Upload size={28} strokeWidth={1.5} className="dropzone-icon" />
           </div>
-          <p className="dropzone-title">Drag &amp; drop your document here</p>
-          <p className="dropzone-hint">PDF, JPG, or PNG — max 10 MB</p>
+          <p className="dropzone-title">
+            {!selectedCategory ? '2. Select a type above to upload' : '2. Drag & drop your document here'}
+          </p>
+          <p className="dropzone-hint">
+            {selectedCategory === 'pdf' && 'PDF — max 10 MB'}
+            {selectedCategory === 'image' && 'JPG or PNG — max 10 MB'}
+            {selectedCategory === 'docx' && 'DOCX — max 10 MB'}
+            {!selectedCategory && 'PDF, JPG, PNG, or DOCX — max 10 MB'}
+          </p>
           {fileError && <p className="file-error">{fileError}</p>}
         </div>
       )}

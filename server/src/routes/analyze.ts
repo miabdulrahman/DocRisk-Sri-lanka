@@ -16,7 +16,7 @@ const upload = multer({
     if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type. Upload PDF, JPG, JPEG, or PNG only."));
+      cb(new Error("Invalid file type. Upload PDF, JPG, JPEG, PNG, or DOCX only."));
     }
   },
 });
@@ -42,7 +42,7 @@ router.post("/", upload.single("document"), async (req, res) => {
     if (!ALLOWED_MIME_TYPES.has(req.file.mimetype)) {
       return res.status(400).json({
         success: false,
-        error: "Invalid file type. Upload PDF, JPG, JPEG, or PNG only.",
+        error: "Invalid file type. Upload PDF, JPG, JPEG, PNG, or DOCX only.",
       });
     }
 
@@ -76,7 +76,29 @@ router.post("/", upload.single("document"), async (req, res) => {
       result: analysisResult,
     });
   } catch (error: unknown) {
-    console.error("Backend Error:", error);
+    const message =
+      error instanceof Error ? error.message : "Internal Server Error";
+
+    console.error("[/api/analyze] request failed", {
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+              cause: error.cause,
+            }
+          : error,
+      file: req.file
+        ? {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+          }
+        : null,
+      outputLang: req.body?.outputLang ?? req.headers["x-output-lang"],
+      authRequired: isFirebaseAuthRequired(),
+    });
 
     if (error instanceof multer.MulterError) {
       if (error.code === "LIMIT_FILE_SIZE") {
@@ -86,9 +108,6 @@ router.post("/", upload.single("document"), async (req, res) => {
         });
       }
     }
-
-    const message =
-      error instanceof Error ? error.message : "Internal Server Error";
 
     const status = message.includes("Invalid file type") ? 400 : 500;
     return res.status(status).json({ success: false, error: message });

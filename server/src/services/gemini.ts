@@ -1,5 +1,6 @@
 import "../loadEnv.js";
 import { GoogleGenAI } from "@google/genai";
+import mammoth from "mammoth";
 import type { AnalysisResult } from "../../../client/src/types.js";
 import { normalizeOutputLang } from "../lib/outputLang.js";
 
@@ -71,17 +72,28 @@ export async function analyzeDocument(
   const modelName = resolveModelName();
   const ai = new GoogleGenAI({ apiKey });
 
+  let documentContent: any;
+
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    const fileBuffer = Buffer.from(fileBase64, "base64");
+    const result = await mammoth.extractRawText({ buffer: fileBuffer });
+    const extractedText = result.value;
+    documentContent = { text: `Document text:\n${extractedText}` };
+  } else {
+    documentContent = {
+      inlineData: {
+        data: fileBase64,
+        mimeType,
+      },
+    };
+  }
+
   let response;
   try {
     response = await ai.models.generateContent({
       model: modelName,
       contents: [
-        {
-          inlineData: {
-            data: fileBase64,
-            mimeType,
-          },
-        },
+        documentContent,
         {
           text: `${langInstruction}\n\nAnalyze this document and return the JSON result.`,
         },
@@ -105,6 +117,8 @@ export async function analyzeDocument(
 
   const text = response.text ?? "";
   const cleaned = stripJsonFences(text);
+  console.log("Raw Gemini response:", text);
+  console.log("Cleaned Gemini response:", cleaned);
 
   if (!cleaned) {
     throw new Error("AI returned an empty response. Please try again.");

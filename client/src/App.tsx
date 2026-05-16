@@ -531,26 +531,29 @@ function AnalyzeTab({ user }: { user: User }) {
 // Skeleton Loader
 // ══════════════════════════════════════════════════════════════════════════════
 function SkeletonLoader() {
+  const [step, setStep] = useState(0)
+  const steps = [
+    "Extracting document text...",
+    "Verifying official seals...",
+    "Cross-referencing formatting...",
+    "Calculating fraud risk score..."
+  ]
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((s) => (s + 1) % steps.length)
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
-    <div className="skeleton-wrap">
-      <div className="skeleton-ring-wrap">
-        <div className="skeleton-ring" />
-        <p className="skeleton-text">Analyzing Document…</p>
+    <div className="scanning-loader-wrap">
+      <div className="scanning-document">
+        <div className="scanning-laser" />
+        <FileText size={64} strokeWidth={1} className="scanning-icon" />
       </div>
-      <div className="skeleton-cards">
-        <div className="skeleton-card">
-          <div className="skel skel--title" />
-          <div className="skel skel--line" />
-          <div className="skel skel--line skel--short" />
-          <div className="skel skel--block" />
-        </div>
-        <div className="skeleton-card">
-          <div className="skel skel--title" />
-          <div className="skel skel--line" />
-          <div className="skel skel--line skel--short" />
-          <div className="skel skel--line" />
-        </div>
-      </div>
+      <h3 className="scanning-title">AI is Analyzing</h3>
+      <p className="scanning-step">{steps[step]}</p>
     </div>
   )
 }
