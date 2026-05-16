@@ -1,0 +1,107 @@
+.result-meta-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.doc-type-badge,
+.output-lang-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.doc-type-badge {
+  color: var(--text-h);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.output-lang-badge {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+[data-theme='dark'] .output-lang-badge {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.result-confidence {
+  margin-bottom: 1.25rem;
+}
+
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.confidence-badge--high {
+  color: #059669;
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.confidence-badge--moderate {
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+.confidence-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-sm);
+  background: #fef9c3;
+  border: 1px solid #facc15;
+  color: #854d0e;
+}
+
+.confidence-warning__icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: #ca8a04;
+}
+
+.confidence-warning__text {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+[data-theme='dark'] .confidence-warning {
+  background: rgba(250, 204, 21, 0.12);
+  border-color: rgba(250, 204, 21, 0.45);
+  color: #fde68a;
+}
+
+[data-theme='dark'] .confidence-warning__icon {
+  color: #facc15;
+}
+
+[data-theme='dark'] .confidence-badge--high {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+[data-theme='dark'] .confidence-badge--moderate {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+}
