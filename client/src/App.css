@@ -644,11 +644,74 @@
 /* ══════════════════════════════════════════════════════════════════════════════
    ANALYZE TAB
 ══════════════════════════════════════════════════════════════════════════════ */
+.lang-selector {
+  position: relative;
+  z-index: 5;
+  margin-bottom: 1.25rem;
+}
+
+.lang-selector__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.lang-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.lang-pill {
+  position: relative;
+  z-index: 2;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.lang-pill:hover {
+  color: var(--text-h);
+  border-color: var(--accent);
+}
+
+.lang-pill--active {
+  color: var(--text-h);
+  background: rgba(99, 102, 241, 0.14);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+
+.risk-cell--badges .result-meta-badges {
+  margin-top: 0.1rem;
+}
+
 .analyze-tab {
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
   animation: fadeUp 0.4s ease both;
+}
+
+.analyze-tab__upload--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Hero */

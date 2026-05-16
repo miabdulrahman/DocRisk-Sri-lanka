@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
@@ -24,18 +25,15 @@ import {
   Settings,
   ShieldCheck,
   Sun,
-  Upload,
   X,
-  Zap,
 } from 'lucide-react'
 import { auth } from './lib/firebase'
-import { saveAnalysisToFirestore } from './lib/saveAnalysis'
-import type { AnalysisResult, AnalyzeApiResponse, RiskLevel } from './types'
+import { ResultConfidence, ResultMetaBadges } from './components/ResultCard'
+import AdminDashboard from './pages/AdminDashboard'
+import { LanguageSelector } from './components/LanguageSelector'
+import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
+import type { AnalysisResult, OutputLang, RiskLevel } from './types'
 import './App.css'
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
-const MAX_BYTES = 10 * 1024 * 1024
-const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png'] as const
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 type Theme = 'dark' | 'light'
@@ -54,21 +52,6 @@ function applyTheme(theme: Theme) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-}
-
-function isAcceptedFile(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return ACCEPTED_EXT.some((ext) => name.endsWith(ext))
-}
-
-function formatDocType(type: string): string {
-  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 function parseFlag(flag: string): { lead: string; detail: string | null } {
   const match = flag.match(/^(.+?)\s*\((.+)\)\s*$/)
   if (match) return { lead: match[1], detail: match[2] }
@@ -148,7 +131,17 @@ export default function App() {
 
   if (!user) return <AuthForm theme={theme} onToggleTheme={toggleTheme} />
 
-  return <MainLayout user={user} theme={theme} onToggleTheme={toggleTheme} />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/admin" element={<AdminDashboard user={user} />} />
+        <Route
+          path="/*"
+          element={<MainLayout user={user} theme={theme} onToggleTheme={toggleTheme} />}
+        />
+      </Routes>
+    </BrowserRouter>
+  )
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -498,201 +491,43 @@ function MobileMenu({
 // Analyze Tab
 // ══════════════════════════════════════════════════════════════════════════════
 function AnalyzeTab({ user }: { user: User }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [dragOver, setDragOver] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [fileError, setFileError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<AnalysisResult | null>(null)
+  const [outputLang, setOutputLang] = useState<OutputLang>('english')
+  const [analysis, setAnalysis] = useState<AnalysisCompletePayload | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
 
-  useEffect(() => {
-    if (!file || !file.type.startsWith('image/')) {
-      setPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
-
-  const validateAndSetFile = useCallback((next: File) => {
-    setFileError(null)
-    setError(null)
-    setResult(null)
-    if (!isAcceptedFile(next)) {
-      setFileError('Please upload a PDF, JPG, JPEG, or PNG file.')
-      return
-    }
-    if (next.size > MAX_BYTES) {
-      setFileError('File must be 10 MB or smaller.')
-      return
-    }
-    setFile(next)
-  }, [])
-
-  const clearFile = () => {
-    setFile(null)
-    setFileError(null)
-    setError(null)
-    setResult(null)
-    if (inputRef.current) inputRef.current.value = ''
+  const clearAnalysis = () => {
+    setAnalysis(null)
+    setAnalyzing(false)
   }
 
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOver(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped) validateAndSetFile(dropped)
-  }
-
-  const onAnalyze = async () => {
-    if (!file || loading) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-
-    const formData = new FormData()
-    formData.append('document', file)
-
-    try {
-      const token = await user.getIdToken()
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        body: formData,
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data: AnalyzeApiResponse = await res.json()
-
-      if (!res.ok || !data.success || !data.result) {
-        throw new Error(data.error ?? 'Analysis failed. Please try again.')
-      }
-
-      setResult(data.result)
-      await saveAnalysisToFirestore(user.uid, file.name, data.result).catch(
-        (saveErr) => console.warn('Could not save to Firestore:', saveErr),
-      )
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (loading) return <SkeletonLoader />
-
-  if (result && file) {
+  if (analysis) {
     return (
       <ResultDashboard
-        result={result}
-        file={file}
-        previewUrl={previewUrl}
-        onReset={clearFile}
+        result={analysis.result}
+        file={analysis.file}
+        previewUrl={analysis.previewUrl}
+        outputLang={analysis.outputLang}
+        onReset={clearAnalysis}
       />
     )
   }
 
   return (
     <div className="analyze-tab">
-      {!file && (
-        <div className="hero">
-          <div className="hero-eyebrow">
-            <span className="hero-dot" />
-            Powered by Gemini 1.5 Flash
-          </div>
-          <h1 className="hero-heading">
-            Detect Document<br />
-            <span className="hero-gradient">Fraud Instantly</span>
-          </h1>
-          <p className="hero-sub">
-            Upload any Sri Lankan document — job offers, land deeds, visa letters, or
-            certificates — and get an AI-powered fraud risk assessment in seconds.
-          </p>
-          <div className="hero-chips">
-            {[
-              { icon: <Zap size={13} />, label: 'Gemini AI' },
-              { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
-              { icon: <FileText size={13} />, label: 'PDF · JPG · PNG' },
-              { icon: <Upload size={13} />, label: 'Max 10 MB' },
-            ].map((chip, i) => (
-              <span
-                key={chip.label}
-                className="hero-chip"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                {chip.icon}
-                {chip.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!file && (
-        <div
-          className={`dropzone${dragOver ? ' drag-over' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
-          }}
-          role="button"
-          tabIndex={0}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) validateAndSetFile(f)
-            }}
-          />
-          <div className="dropzone-icon-wrap">
-            <Upload size={28} strokeWidth={1.5} className="dropzone-icon" />
-          </div>
-          <p className="dropzone-title">Drag &amp; drop your document here</p>
-          <p className="dropzone-hint">PDF, JPG, or PNG — max 10 MB</p>
-          {fileError && <p className="file-error">{fileError}</p>}
-        </div>
-      )}
-
-      {file && (
-        <div className="preview-card">
-          <div className="preview-thumb">
-            {file.type.startsWith('image/') && previewUrl ? (
-              <img src={previewUrl} alt="Document preview" />
-            ) : (
-              <FileText size={48} strokeWidth={1.25} />
-            )}
-          </div>
-          <div className="preview-meta">
-            <p className="preview-name">{file.name}</p>
-            <p className="preview-size">{formatBytes(file.size)}</p>
-            {error && <div className="api-error">{error}</div>}
-            <div className="preview-actions">
-              <button className="btn btn-primary" onClick={onAnalyze}>
-                <ScanSearch size={16} />
-                Analyze Document
-              </button>
-              <button className="btn btn-ghost" onClick={clearFile}>
-                <X size={16} />
-                Remove
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {error && !file && <div className="api-error">{error}</div>}
+      <LanguageSelector value={outputLang} onChange={setOutputLang} />
+      {analyzing && <SkeletonLoader />}
+      <div className={analyzing ? 'analyze-tab__upload analyze-tab__upload--hidden' : 'analyze-tab__upload'}>
+        <Dashboard
+          user={user}
+          outputLang={outputLang}
+          onAnalyzingChange={setAnalyzing}
+          onResult={setAnalysis}
+        />
+      </div>
     </div>
   )
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // Skeleton Loader
 // ══════════════════════════════════════════════════════════════════════════════
 function SkeletonLoader() {
@@ -833,11 +668,13 @@ function ResultDashboard({
   result,
   file,
   previewUrl,
+  outputLang,
   onReset,
 }: {
   result: AnalysisResult
   file: File
   previewUrl: string | null
+  outputLang: OutputLang
   onReset: () => void
 }) {
   const [explanationOpen, setExplanationOpen] = useState(false)
@@ -886,9 +723,12 @@ function ResultDashboard({
 
           {/* Risk Summary Grid */}
           <div className="risk-summary-grid">
-            <div className="risk-cell">
+            <div className="risk-cell risk-cell--badges">
               <span className="risk-cell__label">Document Type</span>
-              <span className="risk-cell__value">{formatDocType(result.document_type)}</span>
+              <ResultMetaBadges
+                documentType={result.document_type}
+                outputLang={outputLang}
+              />
             </div>
             <div className="risk-cell">
               <span className="risk-cell__label">Risk Level</span>
@@ -909,6 +749,8 @@ function ResultDashboard({
               <span className="risk-cell__value risk-cell__value--clamp">{result.summary}</span>
             </div>
           </div>
+
+          <ResultConfidence result={result} />
 
           {/* Red Flags */}
           {result.red_flags.length > 0 && (
