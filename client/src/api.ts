@@ -3,14 +3,24 @@ import { getApiBase } from './lib/apiBase'
 
 export const API_URL = `${getApiBase()}/api/analyze`
 
+export interface AnalyzeOptions {
+  /** Hint to the backend about what kind of document this is — enables fast NIC pre-validation. */
+  documentHint?: 'nic' | string
+  /** Optional NIC number for deterministic pre-validation before paying for Gemini. */
+  nicNumber?: string
+}
+
 export async function analyzeDocument(
   file: File,
   token: string,
   outputLang: string,
+  options: AnalyzeOptions = {},
 ): Promise<AnalyzeApiResponse> {
   const formData = new FormData()
   formData.append('outputLang', outputLang)
   formData.append('document', file)
+  if (options.documentHint) formData.append('documentHint', options.documentHint)
+  if (options.nicNumber) formData.append('nicNumber', options.nicNumber)
 
   let res: Response
   try {

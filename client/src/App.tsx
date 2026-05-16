@@ -11,19 +11,25 @@ import {
 import {
   Activity,
   AlertTriangle,
+  AudioWaveform,
   BarChart3,
   Calendar,
+  Check,
+  ClipboardCopy,
   ClipboardList,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  FileAudio,
   FileText,
   Filter,
   History,
+  IdCard,
   Layers,
   LogOut,
   Mail,
   Menu,
+  Mic,
   Moon,
   RotateCcw,
   ScanSearch,
@@ -34,6 +40,7 @@ import {
   Sparkles,
   Sun,
   TrendingUp,
+  Upload,
   X,
 } from 'lucide-react'
 import { auth, isFirebaseConfigured } from './lib/firebase'
@@ -41,12 +48,13 @@ import { ResultConfidence, ResultMetaBadges } from './components/ResultCard'
 import AdminDashboard from './pages/AdminDashboard'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
+import { getApiBase } from './lib/apiBase'
 import { ScamCard } from './components/ScamCard'
 import { ScamChatModal } from './components/ScamChatModal'
 import { SCAMS, type ScamEntry } from './utils/scamData'
 import { useUserAnalyses } from './hooks/useUserAnalyses'
 import { summarizeAnalyses } from './lib/userAnalyses'
-import type { AnalysisResult, OutputLang, RiskLevel } from './types'
+import type { AnalysisResult, ExtractedData, OutputLang, RiskLevel, TamperBox } from './types'
 import './App.css'
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -113,7 +121,7 @@ function parseAuthError(err: unknown): { code: string; message: string; friendly
   return { code, message, friendly: mapAuthError(code) }
 }
 
-type Tab = 'analyze' | 'history' | 'reports' | 'settings'
+type Tab = 'analyze' | 'audio' | 'history' | 'reports' | 'settings'
 
 // ══════════════════════════════════════════════════════════════════════════════
 // App
@@ -370,6 +378,7 @@ function MainLayout({
         />
         <main className="page">
           {activeTab === 'analyze' && <AnalyzeTab user={user} />}
+          {activeTab === 'audio' && <AudioTab />}
           {activeTab === 'history' && <HistoryTab user={user} />}
           {activeTab === 'reports' && <ReportsTab user={user} />}
           {activeTab === 'settings' && (
@@ -386,6 +395,7 @@ function MainLayout({
 // ══════════════════════════════════════════════════════════════════════════════
 const MAIN_NAV_TABS: { id: Tab; label: string }[] = [
   { id: 'analyze', label: 'Analyze' },
+  { id: 'audio', label: 'Audio Verification' },
   { id: 'history', label: 'History' },
   { id: 'reports', label: 'Reports' },
 ]
@@ -506,6 +516,7 @@ function TopNav({
 // ══════════════════════════════════════════════════════════════════════════════
 const MOBILE_NAV_ICONS: Record<Tab, React.ComponentType<{ size?: number }>> = {
   analyze: ScanSearch,
+  audio: AudioWaveform,
   history: History,
   reports: BarChart3,
   settings: Settings,
@@ -797,6 +808,191 @@ function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) 
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Tamper-bbox overlay
+// ══════════════════════════════════════════════════════════════════════════════
+function tamperBoxToStyle(box: TamperBox['box_2d']): React.CSSProperties {
+  // box is [ymin, xmin, ymax, xmax] on a 0..1000 normalized scale.
+  const [ymin, xmin, ymax, xmax] = box
+  const top = (ymin / 1000) * 100
+  const left = (xmin / 1000) * 100
+  const height = ((ymax - ymin) / 1000) * 100
+  const width = ((xmax - xmin) / 1000) * 100
+  return {
+    top: `${top}%`,
+    left: `${left}%`,
+    width: `${width}%`,
+    height: `${height}%`,
+  }
+}
+
+function DocPreviewWithTamper({
+  file,
+  previewUrl,
+  tamperBoxes,
+}: {
+  file: File
+  previewUrl: string | null
+  tamperBoxes?: TamperBox[]
+}) {
+  const isImage = file.type.startsWith('image/') && previewUrl
+  const boxes = tamperBoxes ?? []
+
+  if (!isImage) {
+    return (
+      <div className="doc-preview">
+        <FileText size={40} strokeWidth={1.25} />
+      </div>
+    )
+  }
+
+  return (
+    <div className={`doc-preview doc-preview--with-overlay${boxes.length ? ' doc-preview--has-tamper' : ''}`}>
+      <img src={previewUrl ?? undefined} alt="Document preview" />
+      {boxes.length > 0 && (
+        <div className="tamper-overlay" aria-hidden={false} aria-label="Detected tampered regions">
+          {boxes.map((box, i) => (
+            <div
+              key={`${box.field_name}-${i}`}
+              className="tamper-box"
+              style={{ ...tamperBoxToStyle(box.box_2d), animationDelay: `${i * 120}ms` }}
+              tabIndex={0}
+              role="button"
+              aria-label={`${box.field_name}: ${box.reason}`}
+            >
+              <span className="tamper-box__label">{box.field_name}</span>
+              <span className="tamper-box__tooltip" role="tooltip">
+                <strong>{box.field_name}</strong>
+                <span>{box.reason}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Extracted Data Card (Auto-Fill)
+// ══════════════════════════════════════════════════════════════════════════════
+const EXTRACTED_FIELD_LABELS: Record<string, string> = {
+  full_name: 'Full Name',
+  document_id: 'Document / NIC Number',
+  date_of_birth: 'Date of Birth',
+  nic_kind: 'NIC Format',
+  nic_birth_year: 'Decoded Birth Year',
+  nic_gender: 'Decoded Gender',
+}
+
+const EXTRACTED_FIELD_ORDER = [
+  'full_name',
+  'document_id',
+  'date_of_birth',
+  'nic_kind',
+  'nic_birth_year',
+  'nic_gender',
+]
+
+function humanizeKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function CopyableField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      // Best-effort fallback for older browsers.
+      const tmp = document.createElement('textarea')
+      tmp.value = value
+      tmp.style.position = 'fixed'
+      tmp.style.left = '-9999px'
+      document.body.appendChild(tmp)
+      tmp.select()
+      try {
+        document.execCommand('copy')
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1400)
+      } catch {
+        /* ignore */
+      } finally {
+        document.body.removeChild(tmp)
+      }
+    }
+  }
+
+  return (
+    <div className="extracted-field">
+      <label className="extracted-field__label">{label}</label>
+      <div className="extracted-field__row">
+        <input
+          className="extracted-field__input"
+          type="text"
+          readOnly
+          value={value}
+          onFocus={(e) => e.currentTarget.select()}
+          aria-label={label}
+        />
+        <button
+          type="button"
+          className={`extracted-field__copy${copied ? ' extracted-field__copy--ok' : ''}`}
+          onClick={onCopy}
+          aria-label={`Copy ${label}`}
+          title={`Copy ${label}`}
+        >
+          {copied ? <Check size={14} /> : <ClipboardCopy size={14} />}
+          <span className="extracted-field__copy-text">{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ExtractedDataCard({ data }: { data: ExtractedData }) {
+  const entries = Object.entries(data).filter(
+    ([, v]) => typeof v === 'string' && v.trim().length > 0,
+  ) as [string, string][]
+
+  if (entries.length === 0) return null
+
+  // Stable, human-friendly ordering with known labels first.
+  const ordered = [
+    ...EXTRACTED_FIELD_ORDER.filter((k) => entries.some(([ek]) => ek === k)).map(
+      (k) => entries.find(([ek]) => ek === k) as [string, string],
+    ),
+    ...entries.filter(([k]) => !EXTRACTED_FIELD_ORDER.includes(k)),
+  ]
+
+  return (
+    <section className="result-card extracted-card" style={{ '--delay': '140ms' } as React.CSSProperties}>
+      <div className="extracted-card__head">
+        <span className="extracted-card__icon">
+          <IdCard size={17} />
+        </span>
+        <div>
+          <h3 className="extracted-card__title">Extracted Document Information</h3>
+          <p className="extracted-card__sub">
+            Auto-filled by Gemini OCR. Verify each field against the original before reuse.
+          </p>
+        </div>
+      </div>
+      <div className="extracted-card__grid">
+        {ordered.map(([key, value]) => (
+          <CopyableField
+            key={key}
+            label={EXTRACTED_FIELD_LABELS[key] ?? humanizeKey(key)}
+            value={value}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Result Dashboard
 // ══════════════════════════════════════════════════════════════════════════════
 function ResultDashboard({
@@ -844,17 +1040,24 @@ function ResultDashboard({
             </button>
           </div>
 
-          {/* Gauge + Preview */}
+          {/* Gauge + Preview (with tamper overlay when boxes exist) */}
           <div className="gauge-preview-row">
             <HalfCircleGauge score={result.risk_score} level={result.risk_level} />
-            <div className="doc-preview">
-              {file.type.startsWith('image/') && previewUrl ? (
-                <img src={previewUrl} alt="Document preview" />
-              ) : (
-                <FileText size={40} strokeWidth={1.25} />
-              )}
-            </div>
+            <DocPreviewWithTamper
+              file={file}
+              previewUrl={previewUrl}
+              tamperBoxes={result.tamper_coordinates}
+            />
           </div>
+
+          {result.tamper_coordinates && result.tamper_coordinates.length > 0 && (
+            <p className="tamper-summary" role="note">
+              <AlertTriangle size={14} />
+              {result.tamper_coordinates.length} suspected tampered{' '}
+              {result.tamper_coordinates.length === 1 ? 'region' : 'regions'} highlighted on the
+              preview — hover a box for the forensic reason.
+            </p>
+          )}
 
           {/* Risk Summary Grid */}
           <div className="risk-summary-grid">
@@ -996,6 +1199,457 @@ function ResultDashboard({
           </button>
         </div>
       </div>
+
+      {/* ── Auto-filled extracted data spans both columns ── */}
+      {result.extracted_data && Object.keys(result.extracted_data).length > 0 && (
+        <div className="result-extracted-row">
+          <ExtractedDataCard data={result.extracted_data} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Audio Verification Tab
+// ══════════════════════════════════════════════════════════════════════════════
+type AudioVerdict = 'Authentic' | 'Suspicious' | 'Altered'
+
+type AudioAnalysis = {
+  authenticity_score: number
+  verdict: AudioVerdict
+  detected_anomalies: string[]
+  summary: string
+  technical_explanation: string
+}
+
+const ACCEPTED_AUDIO_MIMES = new Set([
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+])
+
+function isAcceptedAudio(file: File): boolean {
+  if (ACCEPTED_AUDIO_MIMES.has(file.type)) return true
+  const name = file.name.toLowerCase()
+  return name.endsWith('.mp3') || name.endsWith('.wav')
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+function verdictTone(v: AudioVerdict): { color: string; bg: string; ring: string } {
+  switch (v) {
+    case 'Authentic':
+      return { color: '#34d399', bg: 'rgba(52, 211, 153, 0.12)', ring: 'rgba(52, 211, 153, 0.35)' }
+    case 'Suspicious':
+      return { color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.12)', ring: 'rgba(251, 191, 36, 0.35)' }
+    case 'Altered':
+      return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.14)', ring: 'rgba(239, 68, 68, 0.4)' }
+  }
+}
+
+function AudioTab() {
+  const [file, setFile] = useState<File | null>(null)
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<AudioAnalysis | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl)
+    }
+  }, [audioUrl])
+
+  const reset = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl)
+    setFile(null)
+    setAudioUrl(null)
+    setResult(null)
+    setError(null)
+    setLoading(false)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const acceptFile = (next: File | null) => {
+    if (!next) return
+    if (!isAcceptedAudio(next)) {
+      setError('Unsupported file. Upload an MP3 or WAV audio clip.')
+      return
+    }
+    if (next.size > 10 * 1024 * 1024) {
+      setError('Audio file must be 10 MB or smaller.')
+      return
+    }
+    if (audioUrl) URL.revokeObjectURL(audioUrl)
+    setError(null)
+    setResult(null)
+    setFile(next)
+    setAudioUrl(URL.createObjectURL(next))
+  }
+
+  const onAnalyze = async () => {
+    if (!file) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    try {
+      const form = new FormData()
+      form.append('audio', file)
+      const base = getApiBase()
+      const res = await fetch(`${base}/api/analyze-audio`, {
+        method: 'POST',
+        body: form,
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error ?? `Request failed (${res.status}).`)
+      }
+      setResult(data.analysis as AudioAnalysis)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to analyze audio.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="audio-tab">
+      <header className="audio-hero">
+        <span className="audio-hero__eyebrow">
+          <AudioWaveform size={13} /> Voice fraud forensics
+        </span>
+        <h2 className="audio-hero__title">Audio Verification</h2>
+        <p className="audio-hero__sub">
+          Detect voice deepfakes, splicing, and replay attacks. Upload an MP3 or WAV clip — Gemini will
+          inspect background noise, synthetic speech artifacts, and unnatural cadence on local Sri Lankan
+          words and identification numbers.
+        </p>
+      </header>
+
+      {!result && !loading && (
+        <section
+          className={`audio-dropzone${dragActive ? ' audio-dropzone--active' : ''}${file ? ' audio-dropzone--filled' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragActive(true)
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragActive(false)
+            const dropped = e.dataTransfer.files?.[0]
+            if (dropped) acceptFile(dropped)
+          }}
+          onClick={() => {
+            if (!file) inputRef.current?.click()
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
+            className="audio-dropzone__input"
+            onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+          />
+
+          {!file ? (
+            <div className="audio-dropzone__empty">
+              <div className="audio-dropzone__icon-stack" aria-hidden>
+                <span className="audio-dropzone__pulse" />
+                <span className="audio-dropzone__pulse audio-dropzone__pulse--delay" />
+                <span className="audio-dropzone__icon">
+                  <AudioWaveform size={36} strokeWidth={1.5} />
+                </span>
+              </div>
+              <p className="audio-dropzone__title">Drop your audio file here</p>
+              <p className="audio-dropzone__hint">MP3 or WAV · up to 10 MB</p>
+              <button type="button" className="btn btn-primary audio-dropzone__cta">
+                <Upload size={15} />
+                Choose audio file
+              </button>
+            </div>
+          ) : (
+            <div className="audio-dropzone__filled">
+              <div className="audio-file">
+                <span className="audio-file__icon">
+                  <FileAudio size={22} />
+                </span>
+                <div className="audio-file__meta">
+                  <p className="audio-file__name">{file.name}</p>
+                  <p className="audio-file__sub">
+                    {formatBytes(file.size)} · {file.type || 'audio'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="audio-file__clear"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    reset()
+                  }}
+                  aria-label="Remove file"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {audioUrl && (
+                <div className="audio-player">
+                  <div className="audio-player__waves" aria-hidden>
+                    {Array.from({ length: 32 }).map((_, i) => (
+                      <span key={i} style={{ animationDelay: `${i * 60}ms` }} />
+                    ))}
+                  </div>
+                  <audio
+                    src={audioUrl}
+                    controls
+                    preload="metadata"
+                    className="audio-player__el"
+                  />
+                </div>
+              )}
+
+              <div className="audio-actions" onClick={(e) => e.stopPropagation()}>
+                <button type="button" className="btn btn-ghost" onClick={reset}>
+                  <RotateCcw size={14} />
+                  Replace
+                </button>
+                <button type="button" className="btn btn-primary" onClick={onAnalyze}>
+                  <Mic size={15} />
+                  Analyze audio
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {error && !loading && (
+        <div className="audio-error" role="alert">
+          <AlertTriangle size={15} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loading && (
+        <div className="audio-loading" role="status" aria-busy="true">
+          <div className="audio-loading__spectrum" aria-hidden>
+            {Array.from({ length: 24 }).map((_, i) => (
+              <span key={i} style={{ animationDelay: `${i * 80}ms` }} />
+            ))}
+          </div>
+          <p className="audio-loading__title">Analyzing Audio Spectrum...</p>
+          <p className="audio-loading__sub">
+            Scanning for splice points, synthetic artifacts, and replay signatures.
+          </p>
+        </div>
+      )}
+
+      {result && !loading && (
+        <AudioResultCard
+          analysis={result}
+          fileName={file?.name ?? 'Audio clip'}
+          audioUrl={audioUrl}
+          onReset={reset}
+        />
+      )}
+    </div>
+  )
+}
+
+function AudioResultCard({
+  analysis,
+  fileName,
+  audioUrl,
+  onReset,
+}: {
+  analysis: AudioAnalysis
+  fileName: string
+  audioUrl: string | null
+  onReset: () => void
+}) {
+  const tone = verdictTone(analysis.verdict)
+  const score = Math.min(100, Math.max(0, analysis.authenticity_score))
+
+  // Radial gauge math (3/4 ring)
+  const R = 72
+  const C = 2 * Math.PI * R
+  const visible = 0.75 * C
+  const dash = (score / 100) * visible
+
+  return (
+    <div className="audio-result">
+      <section
+        className="result-card audio-result__card"
+        style={{ '--delay': '0ms' } as React.CSSProperties}
+      >
+        <div className="audio-result__head">
+          <div>
+            <h2 className="audio-result__title">Audio forensic analysis</h2>
+            <p className="audio-result__file">{fileName}</p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onReset}>
+            <RotateCcw size={14} />
+            Analyze another
+          </button>
+        </div>
+
+        <div className="audio-result__grid">
+          <div className="audio-gauge" style={{ '--ring': tone.ring } as React.CSSProperties}>
+            <svg viewBox="0 0 200 200" className="audio-gauge__svg" aria-label={`Authenticity ${score} out of 100`}>
+              <defs>
+                <filter id="audio-glow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="b" />
+                  <feMerge>
+                    <feMergeNode in="b" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle
+                cx="100"
+                cy="100"
+                r={R}
+                fill="none"
+                stroke="var(--surface-2, rgba(255,255,255,0.08))"
+                strokeWidth="14"
+                strokeLinecap="round"
+                strokeDasharray={`${visible} ${C - visible}`}
+                strokeDashoffset={visible / 2}
+                transform="rotate(90 100 100)"
+              />
+              <circle
+                cx="100"
+                cy="100"
+                r={R}
+                fill="none"
+                stroke={tone.color}
+                strokeWidth="14"
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${C - dash}`}
+                strokeDashoffset={visible / 2}
+                transform="rotate(90 100 100)"
+                filter="url(#audio-glow)"
+                style={{ transition: 'stroke-dasharray 0.8s ease' }}
+              />
+              <text
+                x="100"
+                y="96"
+                textAnchor="middle"
+                fill={tone.color}
+                fontSize="38"
+                fontWeight="800"
+                fontFamily="Inter, sans-serif"
+              >
+                {score.toFixed(1)}
+              </text>
+              <text
+                x="100"
+                y="118"
+                textAnchor="middle"
+                fill="var(--text-muted)"
+                fontSize="11"
+                fontWeight="600"
+                letterSpacing="1.5"
+                fontFamily="Inter, sans-serif"
+              >
+                AUTHENTICITY
+              </text>
+            </svg>
+            <span
+              className="audio-gauge__verdict"
+              style={{ color: tone.color, background: tone.bg, borderColor: tone.ring }}
+            >
+              {analysis.verdict === 'Authentic' ? (
+                <ShieldCheck size={14} />
+              ) : (
+                <AlertTriangle size={14} />
+              )}
+              {analysis.verdict}
+            </span>
+          </div>
+
+          <div className="audio-result__summary">
+            <h3 className="section-label">Summary</h3>
+            <p className="audio-result__summary-text">{analysis.summary || 'No summary returned.'}</p>
+
+            {audioUrl && (
+              <div className="audio-result__player">
+                <audio src={audioUrl} controls preload="metadata" />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="result-card audio-result__anomalies"
+        style={{ '--delay': '80ms' } as React.CSSProperties}
+      >
+        <div className="audio-result__sub-head">
+          <span className="audio-result__sub-icon" style={{ color: tone.color, background: tone.bg }}>
+            <AlertTriangle size={16} />
+          </span>
+          <div>
+            <h3 className="audio-result__sub-title">Acoustic anomalies</h3>
+            <p className="audio-result__sub-sub">
+              {analysis.detected_anomalies.length} forensic{' '}
+              {analysis.detected_anomalies.length === 1 ? 'finding' : 'findings'}
+            </p>
+          </div>
+        </div>
+        {analysis.detected_anomalies.length === 0 ? (
+          <p className="audio-result__empty">
+            <ShieldCheck size={14} style={{ color: '#34d399' }} />
+            No acoustic anomalies detected. The clip appears consistent.
+          </p>
+        ) : (
+          <ul className="audio-anomaly-list">
+            {analysis.detected_anomalies.map((item, i) => (
+              <li
+                key={i}
+                className="audio-anomaly"
+                style={{
+                  borderLeftColor: tone.color,
+                  animationDelay: `${i * 70}ms`,
+                }}
+              >
+                <AlertTriangle size={15} style={{ color: tone.color }} />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section
+        className="result-card audio-result__tech"
+        style={{ '--delay': '140ms' } as React.CSSProperties}
+      >
+        <div className="audio-result__sub-head">
+          <span className="audio-result__sub-icon audio-result__sub-icon--violet">
+            <ScanSearch size={16} />
+          </span>
+          <div>
+            <h3 className="audio-result__sub-title">Technical breakdown</h3>
+            <p className="audio-result__sub-sub">Detailed forensic acoustics</p>
+          </div>
+        </div>
+        <div className="audio-result__tech-body">
+          {analysis.technical_explanation || 'No technical explanation provided.'}
+        </div>
+      </section>
     </div>
   )
 }
