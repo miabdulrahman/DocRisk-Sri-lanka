@@ -40,3 +40,23 @@ export async function verifyIdToken(
 export function isFirebaseAuthRequired(): boolean {
   return Boolean(process.env.FIREBASE_PROJECT_ID);
 }
+
+export function getFirestoreDb(): admin.firestore.Firestore | null {
+  if (!initFirebaseAdmin()) return null;
+  return admin.firestore();
+}
+
+export async function isUserAdmin(uid: string): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+
+  try {
+    const snap = await db.collection("config").doc("admins").get();
+    if (!snap.exists) return false;
+    const uids = snap.data()?.uids;
+    return Array.isArray(uids) && uids.includes(uid);
+  } catch (err) {
+    console.warn("Admin check failed:", err);
+    return false;
+  }
+}
