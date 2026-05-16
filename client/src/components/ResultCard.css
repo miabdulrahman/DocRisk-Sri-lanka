@@ -23,15 +23,15 @@
 }
 
 .output-lang-badge {
-  color: #1d4ed8;
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
 }
 
 [data-theme='dark'] .output-lang-badge {
-  color: #93c5fd;
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.38);
 }
 
 .result-confidence {
@@ -49,9 +49,9 @@
 }
 
 .confidence-badge--high {
-  color: #059669;
-  background: rgba(52, 211, 153, 0.15);
-  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: var(--risk-low);
+  background: rgba(134, 239, 172, 0.15);
+  border: 1px solid rgba(134, 239, 172, 0.42);
 }
 
 .confidence-badge--moderate {
@@ -95,9 +95,9 @@
 }
 
 [data-theme='dark'] .confidence-badge--high {
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.12);
-  border-color: rgba(52, 211, 153, 0.35);
+  color: var(--risk-low);
+  background: rgba(134, 239, 172, 0.12);
+  border-color: rgba(134, 239, 172, 0.38);
 }
 
 [data-theme='dark'] .confidence-badge--moderate {

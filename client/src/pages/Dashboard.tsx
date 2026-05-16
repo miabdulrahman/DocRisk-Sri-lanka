@@ -244,144 +244,135 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
       )}
 
       {!file && (
-        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-          <label htmlFor="file-type" style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>
-            1. Select Document Type
-          </label>
-          <select
-            id="file-type"
-            value={selectedCategory}
-            onChange={(e) => {
-              setSelectedCategory(e.target.value as FileCategory)
-              setFileError(null)
-            }}
-            style={{
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              backgroundColor: 'var(--surface)',
-              color: 'var(--text)',
-              fontSize: '1rem',
-              width: '100%',
-              maxWidth: '300px',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="" disabled>-- Choose Type --</option>
-            <option value="nic">Sri Lankan NIC (.jpg, .png, .pdf)</option>
-            <option value="pdf">PDF Document (.pdf)</option>
-            <option value="image">Image (.jpg, .png)</option>
-            <option value="docx">Word Document (.docx)</option>
-          </select>
-        </div>
-      )}
+        <div className="analyze-upload-panel">
+          <div className="analyze-upload-panel__inner">
+            <div className="dash-doc-field analyze-upload-panel__doc-field">
+              <label htmlFor="file-type" className="dash-doc-label">
+                1. Select Document Type
+              </label>
+              <select
+                id="file-type"
+                className="dash-doc-select"
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value as FileCategory)
+                  setFileError(null)
+                }}
+              >
+                <option value="" disabled>-- Choose Type --</option>
+                <option value="nic">Sri Lankan NIC (.jpg, .png, .pdf)</option>
+                <option value="pdf">PDF Document (.pdf)</option>
+                <option value="image">Image (.jpg, .png)</option>
+                <option value="docx">Word Document (.docx)</option>
+              </select>
+            </div>
 
-      {!file && isNic && (
-        <div className="nic-input-card">
-          <div className="nic-input-card__head">
-            <span className="nic-input-card__icon">
-              <IdCard size={16} />
-            </span>
-            <div>
-              <p className="nic-input-card__title">Pre-validate the NIC number</p>
-              <p className="nic-input-card__sub">
-                Enter the printed NIC. We validate it locally (instant) before sending the image to AI.
+            {isNic && (
+              <div className="nic-input-card">
+                <div className="nic-input-card__head">
+                  <span className="nic-input-card__icon">
+                    <IdCard size={16} />
+                  </span>
+                  <div>
+                    <p className="nic-input-card__title">Pre-validate the NIC number</p>
+                    <p className="nic-input-card__sub">
+                      Enter the printed NIC. We validate it locally (instant) before sending the image to AI.
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`nic-input${
+                    nicStatus
+                      ? nicStatus.valid
+                        ? ' nic-input--ok'
+                        : ' nic-input--bad'
+                      : ''
+                  }`}
+                >
+                  <input
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="e.g. 921234567V or 199201234567"
+                    value={nicNumber}
+                    onChange={(e) => setNicNumber(e.target.value)}
+                    aria-label="NIC number"
+                  />
+                  {nicStatus && (
+                    <span className="nic-input__status" aria-live="polite">
+                      {nicStatus.valid ? (
+                        <>
+                          <CheckCircle2 size={14} /> {nicStatus.kind?.toUpperCase()} · {nicStatus.birthYear}
+                          {nicStatus.gender ? ` · ${nicStatus.gender}` : ''}
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle size={14} /> {nicStatus.error}
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div
+              className={`dropzone${dragOver ? ' drag-over' : ''}${!selectedCategory ? ' disabled' : ''}`}
+              style={{
+                opacity: !selectedCategory ? 0.5 : 1,
+                cursor: !selectedCategory ? 'not-allowed' : 'pointer',
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                if (selectedCategory) setDragOver(true)
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => {
+                if (!selectedCategory) {
+                  setFileError('Please select a document type first.')
+                  return
+                }
+                inputRef.current?.click()
+              }}
+              onKeyDown={(e) => {
+                if (!selectedCategory) return
+                if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+              }}
+              role="button"
+              tabIndex={selectedCategory ? 0 : -1}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept={getAcceptString()}
+                disabled={!selectedCategory}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) validateAndSetFile(f, selectedCategory)
+                }}
+              />
+              <div className="dropzone-icon-wrap">
+                <Upload size={28} strokeWidth={1.5} className="dropzone-icon" />
+              </div>
+              <p className="dropzone-title">
+                {!selectedCategory
+                  ? '2. Select a type above to upload'
+                  : isNic
+                    ? '2. Drag & drop a clear NIC photo or scan'
+                    : '2. Drag & drop your document here'}
               </p>
+              <p className="dropzone-hint">
+                {selectedCategory === 'pdf' && 'PDF — max 10 MB'}
+                {selectedCategory === 'image' && 'JPG or PNG — max 10 MB'}
+                {selectedCategory === 'docx' && 'DOCX — max 10 MB'}
+                {selectedCategory === 'nic' && 'JPG, PNG, or PDF — max 10 MB'}
+                {!selectedCategory && 'PDF, JPG, PNG, DOCX, or NIC — max 10 MB'}
+              </p>
+              {fileError && <p className="file-error">{fileError}</p>}
             </div>
           </div>
-          <div
-            className={`nic-input${
-              nicStatus
-                ? nicStatus.valid
-                  ? ' nic-input--ok'
-                  : ' nic-input--bad'
-                : ''
-            }`}
-          >
-            <input
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="e.g. 921234567V or 199201234567"
-              value={nicNumber}
-              onChange={(e) => setNicNumber(e.target.value)}
-              aria-label="NIC number"
-            />
-            {nicStatus && (
-              <span className="nic-input__status" aria-live="polite">
-                {nicStatus.valid ? (
-                  <>
-                    <CheckCircle2 size={14} /> {nicStatus.kind?.toUpperCase()} · {nicStatus.birthYear}
-                    {nicStatus.gender ? ` · ${nicStatus.gender}` : ''}
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={14} /> {nicStatus.error}
-                  </>
-                )}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {!file && (
-        <div
-          className={`dropzone${dragOver ? ' drag-over' : ''}${!selectedCategory ? ' disabled' : ''}`}
-          style={{
-            opacity: !selectedCategory ? 0.5 : 1,
-            cursor: !selectedCategory ? 'not-allowed' : 'pointer',
-          }}
-          onDragOver={(e) => {
-            e.preventDefault()
-            if (selectedCategory) setDragOver(true)
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => {
-            if (!selectedCategory) {
-              setFileError('Please select a document type first.')
-              return
-            }
-            inputRef.current?.click()
-          }}
-          onKeyDown={(e) => {
-            if (!selectedCategory) return
-            if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
-          }}
-          role="button"
-          tabIndex={selectedCategory ? 0 : -1}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept={getAcceptString()}
-            disabled={!selectedCategory}
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) validateAndSetFile(f, selectedCategory)
-            }}
-          />
-          <div className="dropzone-icon-wrap">
-            <Upload size={28} strokeWidth={1.5} className="dropzone-icon" />
-          </div>
-          <p className="dropzone-title">
-            {!selectedCategory
-              ? '2. Select a type above to upload'
-              : isNic
-                ? '2. Drag & drop a clear NIC photo or scan'
-                : '2. Drag & drop your document here'}
-          </p>
-          <p className="dropzone-hint">
-            {selectedCategory === 'pdf' && 'PDF — max 10 MB'}
-            {selectedCategory === 'image' && 'JPG or PNG — max 10 MB'}
-            {selectedCategory === 'docx' && 'DOCX — max 10 MB'}
-            {selectedCategory === 'nic' && 'JPG, PNG, or PDF — max 10 MB'}
-            {!selectedCategory && 'PDF, JPG, PNG, or DOCX — max 10 MB'}
-          </p>
-          {fileError && <p className="file-error">{fileError}</p>}
         </div>
       )}
 

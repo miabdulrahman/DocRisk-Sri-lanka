@@ -722,7 +722,7 @@ function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) 
       : `M ${CX - R} ${CY} A ${R} ${R} 0 ${largeArc} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`
 
   const riskColor =
-    level === 'low' ? '#34d399' : level === 'medium' ? '#fbbf24' : '#ef4444'
+    level === 'low' ? '#86efac' : level === 'medium' ? '#fbbf24' : '#ef4444'
 
   // Pointer rotates from -180° (score=0) to 0° (score=100)
   const pointerDeg = -180 + clamped * 1.8
@@ -736,7 +736,7 @@ function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) 
       >
         <defs>
           <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#34d399" />
+            <stop offset="0%" stopColor="#86efac" />
             <stop offset="50%" stopColor="#fbbf24" />
             <stop offset="100%" stopColor="#ef4444" />
           </linearGradient>
@@ -787,7 +787,7 @@ function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) 
           fill={riskColor}
           fontSize="28"
           fontWeight="800"
-          fontFamily="Inter, sans-serif"
+          fontFamily="Plus Jakarta Sans, Inter, sans-serif"
         >
           {(score / 10).toFixed(1)}
         </text>
@@ -798,7 +798,7 @@ function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) 
           fill="var(--text-muted)"
           fontSize="11"
           fontWeight="500"
-          fontFamily="Inter, sans-serif"
+          fontFamily="Plus Jakarta Sans, Inter, sans-serif"
         >
           / 10
         </text>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="bgtd-floor" x1="50%" y1="100%" x2="50%" y2="40%">
+      <stop offset="0%" stop-color="#1c0505" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#0a0a0a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="bgtd-threat" cx="24%" cy="72%" r="52%">
+      <stop offset="0%" stop-color="#dc2626" stop-opacity="0.42"/>
+      <stop offset="55%" stop-color="#7f1d1d" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bgtd-defend" cx="74%" cy="58%" r="38%">
+      <stop offset="0%" stop-color="#fecaca" stop-opacity="0.18"/>
+      <stop offset="70%" stop-color="#991b1b" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1400" height="900" fill="url(#bgtd-floor)"/>
+  <ellipse cx="336" cy="648" rx="480" ry="320" fill="url(#bgtd-threat)"/>
+  <!-- Hood + shoulders (scammer silhouette) -->
+  <g opacity="0.92">
+    <ellipse cx="268" cy="498" rx="88" ry="66" fill="#050505"/>
+    <ellipse cx="268" cy="486" rx="58" ry="44" fill="#171717"/>
+    <path fill="#050505" d="M118 558 Q268 492 418 558 L432 698 Q268 668 104 698 Z"/>
+    <!-- Laptop -->
+    <rect x="218" y="548" width="248" height="138" rx="10" fill="#0c0c0c" stroke="#292929" stroke-width="2"/>
+    <rect x="236" y="564" width="212" height="106" rx="5" fill="#140303"/>
+    <rect x="236" y="564" width="212" height="106" rx="5" fill="#450a0a" opacity="0.45"/>
+    <rect x="210" y="672" width="264" height="18" rx="4" fill="#111"/>
+    <!-- Attack vectors / phishing streaks -->
+    <path stroke="#b91c1c" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="8 14" stroke-linecap="round" d="M468 616 Q720 540 1120 472"/>
+    <path stroke="#991b1b" stroke-opacity="0.4" stroke-width="2" stroke-dasharray="5 16" stroke-linecap="round" d="M468 642 Q760 598 1040 548"/>
+    <path stroke="#7f1d1d" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="4 12" stroke-linecap="round" d="M468 668 Q820 642 980 608"/>
+  </g>
+  <!-- Defensive shield blocking -->
+  <g transform="translate(748 298)" opacity="0.72">
+    <path fill="#070707" stroke="#dc2626" stroke-width="3.2" stroke-opacity="0.55" d="M148 22 L284 98 V288 C284 428 148 508 148 508 S12 428 12 288V98L148 22Z"/>
+    <path stroke="#fecaca" stroke-opacity="0.5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M76 356 L148 422 258 246"/>
+    <circle cx="148" cy="188" r="56" stroke="#ef4444" stroke-opacity="0.22" stroke-width="2" fill="none"/>
+  </g>
+  <ellipse cx="896" cy="556" rx="220" ry="180" fill="url(#bgtd-defend)"/>
+</svg>
