@@ -9,10 +9,15 @@ import {
   Upload,
   X,
 } from 'lucide-react'
+import { AuthBar } from './components/AuthBar'
+import { useAuth } from './contexts/AuthContext'
+import { isFirebaseConfigured } from './lib/firebase'
+import { saveAnalysisToFirestore } from './lib/saveAnalysis'
 import type { AnalysisResult, AnalyzeApiResponse, RiskLevel } from './types'
 import './App.css'
 
-const API_URL = 'http://localhost:4000/api/analyze'
+const API_URL =
+  import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
 const MAX_BYTES = 10 * 1024 * 1024
 const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png'] as const
 
@@ -45,6 +50,7 @@ function isAcceptedFile(file: File): boolean {
 }
 
 function App() {
+  const { user, firebaseEnabled, getIdToken } = useAuth()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -105,17 +111,33 @@ function App() {
     setResult(null)
     setExplanationOpen(false)
 
+    if (firebaseEnabled && !user) {
+      setError('Sign in with Google to analyze documents.')
+      setLoading(false)
+      return
+    }
+
     const formData = new FormData()
     formData.append('document', file)
 
     try {
-      const res = await fetch(API_URL, { method: 'POST', body: formData })
+      const headers: HeadersInit = {}
+      const token = await getIdToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+
+      const res = await fetch(API_URL, { method: 'POST', body: formData, headers })
       const data: AnalyzeApiResponse = await res.json()
 
       if (!res.ok || !data.success || !data.result) {
         throw new Error(data.error ?? 'Analysis failed. Please try again.')
       }
       setResult(data.result)
+
+      if (user && isFirebaseConfigured) {
+        await saveAnalysisToFirestore(user.uid, file.name, data.result).catch(
+          (saveErr) => console.warn('Could not save to Firestore:', saveErr)
+        )
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -133,11 +155,15 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <AuthBar />
         <h1>DocRisk Sri Lanka</h1>
         <p>
           Upload a document to detect fraud signals in job offers, deeds, visas,
           and other official paperwork.
         </p>
+        {firebaseEnabled && !user && (
+          <p className="auth-hint">Sign in to analyze and save your results.</p>
+        )}
       </header>
 
       {!file && !loading && (
