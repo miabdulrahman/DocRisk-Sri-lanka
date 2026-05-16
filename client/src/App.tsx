@@ -9,86 +9,51 @@ import {
 } from 'firebase/auth'
 import {
   AlertTriangle,
+  Bell,
+  ClipboardList,
   ChevronDown,
   ChevronUp,
   FileText,
-  Lightbulb,
+  History,
   LogOut,
   Mail,
-  Shield,
-  ShieldAlert,
+  Menu,
+  Moon,
+  RotateCcw,
+  ScanSearch,
+  Settings,
+  ShieldCheck,
+  Sun,
   Upload,
   X,
+  Zap,
 } from 'lucide-react'
 import { auth } from './lib/firebase'
 import { saveAnalysisToFirestore } from './lib/saveAnalysis'
 import type { AnalysisResult, AnalyzeApiResponse, RiskLevel } from './types'
 import './App.css'
 
-const API_URL =
-  import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
 const MAX_BYTES = 10 * 1024 * 1024
 const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png'] as const
 
-function mapAuthError(code: string): string {
-  switch (code) {
-    case 'auth/invalid-email':
-      return 'Invalid email address.'
-    case 'auth/user-disabled':
-      return 'This account has been disabled.'
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Incorrect email or password.'
-    case 'auth/email-already-in-use':
-      return 'An account with this email already exists.'
-    case 'auth/weak-password':
-      return 'Password must be at least 6 characters.'
-    case 'auth/operation-not-allowed':
-      return 'Email/password sign-in is not enabled in Firebase Console.'
-    default:
-      return 'Authentication failed. Please try again.'
-  }
+// ── Theme ─────────────────────────────────────────────────────────────────────
+type Theme = 'dark' | 'light'
+
+function getInitialTheme(): Theme {
+  try {
+    const stored = localStorage.getItem('docrisk-theme')
+    if (stored === 'dark' || stored === 'light') return stored
+  } catch { /* ignore */ }
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-function parseAuthError(err: unknown): { code: string; message: string; friendly: string } {
-  if (err instanceof FirebaseError) {
-    return {
-      code: err.code,
-      message: err.message,
-      friendly: mapAuthError(err.code),
-    }
-  }
-  const code =
-    err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
-      ? err.code
-      : 'unknown'
-  const message =
-    err instanceof Error
-      ? err.message
-      : err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
-        ? err.message
-        : String(err)
-  return { code, message, friendly: mapAuthError(code) }
+function applyTheme(theme: Theme) {
+  document.documentElement.setAttribute('data-theme', theme)
+  try { localStorage.setItem('docrisk-theme', theme) } catch { /* ignore */ }
 }
 
-function getRiskColor(level: RiskLevel): string {
-  switch (level) {
-    case 'low':
-      return '#22c55e'
-    case 'medium':
-      return '#f59e0b'
-    case 'high':
-      return '#ef4444'
-    default:
-      return '#71717a'
-  }
-}
-
-function formatDocType(type: string): string {
-  return type.replace(/_/g, ' ')
-}
-
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -100,9 +65,68 @@ function isAcceptedFile(file: File): boolean {
   return ACCEPTED_EXT.some((ext) => name.endsWith(ext))
 }
 
+function formatDocType(type: string): string {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function parseFlag(flag: string): { lead: string; detail: string | null } {
+  const match = flag.match(/^(.+?)\s*\((.+)\)\s*$/)
+  if (match) return { lead: match[1], detail: match[2] }
+  return { lead: flag, detail: null }
+}
+
+function getRiskColor(level: RiskLevel): string {
+  switch (level) {
+    case 'low': return 'var(--risk-low)'
+    case 'medium': return 'var(--risk-medium)'
+    case 'high': return 'var(--risk-high)'
+    default: return 'var(--text-muted)'
+  }
+}
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+function mapAuthError(code: string): string {
+  switch (code) {
+    case 'auth/invalid-email': return 'Invalid email address.'
+    case 'auth/user-disabled': return 'This account has been disabled.'
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential': return 'Incorrect email or password.'
+    case 'auth/email-already-in-use': return 'An account with this email already exists.'
+    case 'auth/weak-password': return 'Password must be at least 6 characters.'
+    case 'auth/operation-not-allowed': return 'Email/password sign-in is not enabled.'
+    default: return 'Authentication failed. Please try again.'
+  }
+}
+
+function parseAuthError(err: unknown): { code: string; message: string; friendly: string } {
+  if (err instanceof FirebaseError) {
+    return { code: err.code, message: err.message, friendly: mapAuthError(err.code) }
+  }
+  const code =
+    err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string'
+      ? (err as { code: string }).code
+      : 'unknown'
+  const message =
+    err instanceof Error
+      ? err.message
+      : err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+        ? (err as { message: string }).message
+        : String(err)
+  return { code, message, friendly: mapAuthError(code) }
+}
+
+type Tab = 'analyze' | 'history' | 'reports' | 'settings'
+
+// ══════════════════════════════════════════════════════════════════════════════
+// App
+// ══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [theme, setTheme] = useState<Theme>(getInitialTheme)
+
+  useEffect(() => { applyTheme(theme) }, [theme])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -112,31 +136,29 @@ export default function App() {
     return unsubscribe
   }, [])
 
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+
   if (authLoading) {
     return (
-      <div className="shell shell--centered">
-        <div className="loading-panel">
-          <div className="loading-spinner" />
-          <p className="loading-text">Loading…</p>
-        </div>
+      <div className="app-loading">
+        <div className="spinner" />
       </div>
     )
   }
 
-  if (!user) return <AuthForm />
+  if (!user) return <AuthForm theme={theme} onToggleTheme={toggleTheme} />
 
-  return <Dashboard user={user} />
+  return <MainLayout user={user} theme={theme} onToggleTheme={toggleTheme} />
 }
 
-function AuthForm() {
+// ══════════════════════════════════════════════════════════════════════════════
+// Auth Form
+// ══════════════════════════════════════════════════════════════════════════════
+function AuthForm({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [authError, setAuthError] = useState<{
-    code: string
-    message: string
-    friendly: string
-  } | null>(null)
+  const [authError, setAuthError] = useState<{ code: string; message: string; friendly: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -149,7 +171,7 @@ function AuthForm() {
       } else {
         await createUserWithEmailAndPassword(auth, email.trim(), password)
       }
-    } catch (err: unknown) {
+    } catch (err) {
       setAuthError(parseAuthError(err))
     } finally {
       setSubmitting(false)
@@ -157,23 +179,34 @@ function AuthForm() {
   }
 
   return (
-    <div className="shell shell--centered">
-      <div className="auth-box">
-        <div className="auth-box__icon">
-          <Shield size={28} strokeWidth={1.5} />
+    <div className="auth-shell">
+      <button className="theme-toggle theme-toggle--auth" onClick={onToggleTheme} aria-label="Toggle theme">
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+      <div className="auth-card">
+        <div className="auth-logo">
+          <span className="auth-logo__icon">
+            <ShieldCheck size={24} strokeWidth={1.5} />
+          </span>
+          <div>
+            <p className="auth-logo__brand">DocRisk</p>
+            <p className="auth-logo__sub">Sri Lanka</p>
+          </div>
         </div>
-        <h1>DocRisk Sri Lanka</h1>
-        <p className="auth-box__subtitle">
+        <h1 className="auth-heading">
+          {mode === 'signin' ? 'Welcome back' : 'Create account'}
+        </h1>
+        <p className="auth-subheading">
           {mode === 'signin'
             ? 'Sign in to analyze documents for fraud.'
-            : 'Create an account to get started.'}
+            : 'Get started with DocRisk Sri Lanka.'}
         </p>
 
         <form className="auth-form" onSubmit={onSubmit}>
           <label className="auth-field">
             <span>Email</span>
             <div className="auth-input-wrap">
-              <Mail size={18} />
+              <Mail size={16} />
               <input
                 type="email"
                 autoComplete="email"
@@ -187,35 +220,27 @@ function AuthForm() {
 
           <label className="auth-field">
             <span>Password</span>
-            <input
-              type="password"
-              className="auth-input"
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-            />
+            <div className="auth-input-wrap">
+              <input
+                type="password"
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
           </label>
 
           {authError && (
-            <div className="auth-error-banner" role="alert">
-              <p className="auth-error-banner__title">{authError.friendly}</p>
-              <p className="auth-error-banner__detail">
-                <strong>Code:</strong> {authError.code}
-              </p>
-              <p className="auth-error-banner__detail">
-                <strong>Message:</strong> {authError.message}
-              </p>
+            <div className="auth-error" role="alert">
+              <p className="auth-error__title">{authError.friendly}</p>
+              <p className="auth-error__detail"><strong>Code:</strong> {authError.code}</p>
             </div>
           )}
 
-          <button
-            type="submit"
-            className="btn btn-primary auth-submit"
-            disabled={submitting}
-          >
+          <button type="submit" className="btn btn-primary auth-submit" disabled={submitting}>
             {submitting ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
@@ -227,10 +252,7 @@ function AuthForm() {
               <button
                 type="button"
                 className="auth-link"
-                onClick={() => {
-                  setAuthError(null)
-                  setMode('signup')
-                }}
+                onClick={() => { setAuthError(null); setMode('signup') }}
               >
                 Sign up
               </button>
@@ -241,10 +263,7 @@ function AuthForm() {
               <button
                 type="button"
                 className="auth-link"
-                onClick={() => {
-                  setAuthError(null)
-                  setMode('signin')
-                }}
+                onClick={() => { setAuthError(null); setMode('signin') }}
               >
                 Sign in
               </button>
@@ -256,7 +275,229 @@ function AuthForm() {
   )
 }
 
-function Dashboard({ user }: { user: User }) {
+// ══════════════════════════════════════════════════════════════════════════════
+// Main Layout
+// ══════════════════════════════════════════════════════════════════════════════
+function MainLayout({
+  user,
+  theme,
+  onToggleTheme,
+}: {
+  user: User
+  theme: Theme
+  onToggleTheme: () => void
+}) {
+  const [activeTab, setActiveTab] = useState<Tab>('analyze')
+  const [scrolled, setScrolled] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab)
+    setMobileOpen(false)
+  }
+
+  return (
+    <div className="app-root">
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onLogout={() => signOut(auth)}
+      />
+      <div className="main-col">
+        <TopNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          scrolled={scrolled}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          user={user}
+          mobileOpen={mobileOpen}
+          onMobileToggle={() => setMobileOpen((o) => !o)}
+        />
+        <MobileMenu
+          open={mobileOpen}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onLogout={() => signOut(auth)}
+        />
+        <main className="page">
+          {activeTab === 'analyze' && <AnalyzeTab user={user} />}
+          {activeTab === 'history' && <HistoryTab />}
+          {activeTab === 'reports' && <ReportsTab />}
+          {activeTab === 'settings' && (
+            <SettingsTab theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Sidebar
+// ══════════════════════════════════════════════════════════════════════════════
+const SIDEBAR_NAV: { id: Tab; icon: React.ReactNode; label: string }[] = [
+  { id: 'analyze', icon: <ScanSearch size={20} />, label: 'Analyze' },
+  { id: 'history', icon: <FileText size={20} />, label: 'History' },
+  { id: 'reports', icon: <ClipboardList size={20} />, label: 'Reports' },
+  { id: 'settings', icon: <Settings size={20} />, label: 'Settings' },
+]
+
+function Sidebar({
+  activeTab,
+  onTabChange,
+  onLogout,
+}: {
+  activeTab: Tab
+  onTabChange: (t: Tab) => void
+  onLogout: () => void
+}) {
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-top">
+        <div className="sidebar-logo">
+          <ShieldCheck size={20} strokeWidth={1.5} />
+        </div>
+        {SIDEBAR_NAV.map((item) => (
+          <button
+            key={item.id}
+            className={`sidebar-item${activeTab === item.id ? ' sidebar-item--active' : ''}`}
+            onClick={() => onTabChange(item.id)}
+            title={item.label}
+            aria-label={item.label}
+          >
+            {item.icon}
+          </button>
+        ))}
+      </div>
+      <div className="sidebar-bottom">
+        <button className="sidebar-item" title="Notifications" aria-label="Notifications">
+          <Bell size={20} />
+        </button>
+        <button
+          className="sidebar-item sidebar-item--danger"
+          onClick={onLogout}
+          title="Log out"
+          aria-label="Log out"
+        >
+          <LogOut size={20} />
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Top Nav
+// ══════════════════════════════════════════════════════════════════════════════
+const NAV_TABS: { id: Tab; label: string }[] = [
+  { id: 'analyze', label: 'Analyze' },
+  { id: 'history', label: 'History' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'settings', label: 'Settings' },
+]
+
+function TopNav({
+  activeTab,
+  onTabChange,
+  scrolled,
+  theme,
+  onToggleTheme,
+  user,
+  mobileOpen,
+  onMobileToggle,
+}: {
+  activeTab: Tab
+  onTabChange: (t: Tab) => void
+  scrolled: boolean
+  theme: Theme
+  onToggleTheme: () => void
+  user: User
+  mobileOpen: boolean
+  onMobileToggle: () => void
+}) {
+  return (
+    <nav className={`top-nav${scrolled ? ' scrolled' : ''}`}>
+      <div className="nav-brand">
+        <span className="nav-logo">
+          <ShieldCheck size={18} strokeWidth={1.5} />
+        </span>
+        <span className="nav-brand-name">DocRisk</span>
+        <span className="nav-brand-sub">Sri Lanka</span>
+      </div>
+
+      <div className="nav-tabs">
+        {NAV_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            className={`nav-tab${activeTab === tab.id ? ' nav-tab--active' : ''}`}
+            onClick={() => onTabChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="nav-right">
+        <button className="theme-toggle" onClick={onToggleTheme} aria-label="Toggle theme">
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        <div className="user-chip">
+          <div className="user-avatar">
+            {(user.email?.[0] ?? 'U').toUpperCase()}
+          </div>
+          <span className="user-name">{user.email}</span>
+        </div>
+        <button className="hamburger" onClick={onMobileToggle} aria-label="Toggle menu">
+          {mobileOpen ? <X size={19} /> : <Menu size={19} />}
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Mobile Menu
+// ══════════════════════════════════════════════════════════════════════════════
+function MobileMenu({
+  open,
+  activeTab,
+  onTabChange,
+  onLogout,
+}: {
+  open: boolean
+  activeTab: Tab
+  onTabChange: (t: Tab) => void
+  onLogout: () => void
+}) {
+  return (
+    <div className={`mobile-menu${open ? ' mobile-menu--open' : ''}`}>
+      {NAV_TABS.map((tab) => (
+        <button
+          key={tab.id}
+          className={`mobile-menu-item${activeTab === tab.id ? ' mobile-menu-item--active' : ''}`}
+          onClick={() => onTabChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+      <button className="mobile-menu-item mobile-menu-item--danger" onClick={onLogout}>
+        Log out
+      </button>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Analyze Tab
+// ══════════════════════════════════════════════════════════════════════════════
+function AnalyzeTab({ user }: { user: User }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -265,7 +506,6 @@ function Dashboard({ user }: { user: User }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [explanationOpen, setExplanationOpen] = useState(false)
 
   useEffect(() => {
     if (!file || !file.type.startsWith('image/')) {
@@ -297,7 +537,6 @@ function Dashboard({ user }: { user: User }) {
     setFileError(null)
     setError(null)
     setResult(null)
-    setExplanationOpen(false)
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -310,11 +549,9 @@ function Dashboard({ user }: { user: User }) {
 
   const onAnalyze = async () => {
     if (!file || loading) return
-
     setLoading(true)
     setError(null)
     setResult(null)
-    setExplanationOpen(false)
 
     const formData = new FormData()
     formData.append('document', file)
@@ -334,7 +571,7 @@ function Dashboard({ user }: { user: User }) {
 
       setResult(data.result)
       await saveAnalysisToFirestore(user.uid, file.name, data.result).catch(
-        (saveErr) => console.warn('Could not save to Firestore:', saveErr)
+        (saveErr) => console.warn('Could not save to Firestore:', saveErr),
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
@@ -343,47 +580,59 @@ function Dashboard({ user }: { user: User }) {
     }
   }
 
-  const isImage = file?.type.startsWith('image/')
-  const riskColor = result ? getRiskColor(result.risk_level) : '#71717a'
-  const circumference = 2 * Math.PI * 36
-  const ringOffset = result
-    ? circumference - (result.risk_score / 100) * circumference
-    : circumference
+  if (loading) return <SkeletonLoader />
+
+  if (result && file) {
+    return (
+      <ResultDashboard
+        result={result}
+        file={file}
+        previewUrl={previewUrl}
+        onReset={clearFile}
+      />
+    )
+  }
 
   return (
-    <div className="shell">
-      <header className="dash-header">
-        <div className="dash-header__brand">
-          <Shield size={22} className="dash-header__logo" />
-          <span>DocRisk Sri Lanka</span>
+    <div className="analyze-tab">
+      {!file && (
+        <div className="hero">
+          <div className="hero-eyebrow">
+            <span className="hero-dot" />
+            Powered by Gemini 1.5 Flash
+          </div>
+          <h1 className="hero-heading">
+            Detect Document<br />
+            <span className="hero-gradient">Fraud Instantly</span>
+          </h1>
+          <p className="hero-sub">
+            Upload any Sri Lankan document — job offers, land deeds, visa letters, or
+            certificates — and get an AI-powered fraud risk assessment in seconds.
+          </p>
+          <div className="hero-chips">
+            {[
+              { icon: <Zap size={13} />, label: 'Gemini AI' },
+              { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
+              { icon: <FileText size={13} />, label: 'PDF · JPG · PNG' },
+              { icon: <Upload size={13} />, label: 'Max 10 MB' },
+            ].map((chip, i) => (
+              <span
+                key={chip.label}
+                className="hero-chip"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                {chip.icon}
+                {chip.label}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="dash-header__actions">
-          <span className="dash-header__user" title={user.email ?? undefined}>
-            {user.email}
-          </span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-logout"
-            onClick={() => signOut(auth)}
-          >
-            <LogOut size={16} />
-            Log out
-          </button>
-        </div>
-      </header>
+      )}
 
-      <p className="dash-tagline">
-        Upload a document to detect fraud signals in job offers, deeds, visas, and
-        other official paperwork.
-      </p>
-
-      {!file && !loading && (
+      {!file && (
         <div
           className={`dropzone${dragOver ? ' drag-over' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragOver(true)
-          }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
@@ -398,21 +647,23 @@ function Dashboard({ user }: { user: User }) {
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
             onChange={(e) => {
-              const selected = e.target.files?.[0]
-              if (selected) validateAndSetFile(selected)
+              const f = e.target.files?.[0]
+              if (f) validateAndSetFile(f)
             }}
           />
-          <Upload className="dropzone-icon" size={36} strokeWidth={1.5} />
-          <p className="dropzone-title">Drag & drop your document here</p>
+          <div className="dropzone-icon-wrap">
+            <Upload size={28} strokeWidth={1.5} className="dropzone-icon" />
+          </div>
+          <p className="dropzone-title">Drag &amp; drop your document here</p>
           <p className="dropzone-hint">PDF, JPG, or PNG — max 10 MB</p>
           {fileError && <p className="file-error">{fileError}</p>}
         </div>
       )}
 
-      {file && !loading && !result && (
+      {file && (
         <div className="preview-card">
           <div className="preview-thumb">
-            {isImage && previewUrl ? (
+            {file.type.startsWith('image/') && previewUrl ? (
               <img src={previewUrl} alt="Document preview" />
             ) : (
               <FileText size={48} strokeWidth={1.25} />
@@ -421,13 +672,14 @@ function Dashboard({ user }: { user: User }) {
           <div className="preview-meta">
             <p className="preview-name">{file.name}</p>
             <p className="preview-size">{formatBytes(file.size)}</p>
+            {error && <div className="api-error">{error}</div>}
             <div className="preview-actions">
-              <button type="button" className="btn btn-primary" onClick={onAnalyze}>
-                <ShieldAlert size={18} />
+              <button className="btn btn-primary" onClick={onAnalyze}>
+                <ScanSearch size={16} />
                 Analyze Document
               </button>
-              <button type="button" className="btn btn-ghost" onClick={clearFile}>
-                <X size={18} />
+              <button className="btn btn-ghost" onClick={clearFile}>
+                <X size={16} />
                 Remove
               </button>
             </div>
@@ -435,115 +687,439 @@ function Dashboard({ user }: { user: User }) {
         </div>
       )}
 
-      {loading && (
-        <div className="loading-panel">
-          <div className="loading-spinner" />
-          <p className="loading-text">Analyzing...</p>
+      {error && !file && <div className="api-error">{error}</div>}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Skeleton Loader
+// ══════════════════════════════════════════════════════════════════════════════
+function SkeletonLoader() {
+  return (
+    <div className="skeleton-wrap">
+      <div className="skeleton-ring-wrap">
+        <div className="skeleton-ring" />
+        <p className="skeleton-text">Analyzing Document…</p>
+      </div>
+      <div className="skeleton-cards">
+        <div className="skeleton-card">
+          <div className="skel skel--title" />
+          <div className="skel skel--line" />
+          <div className="skel skel--line skel--short" />
+          <div className="skel skel--block" />
         </div>
-      )}
+        <div className="skeleton-card">
+          <div className="skel skel--title" />
+          <div className="skel skel--line" />
+          <div className="skel skel--line skel--short" />
+          <div className="skel skel--line" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      {error && <div className="api-error">{error}</div>}
+// ══════════════════════════════════════════════════════════════════════════════
+// Half-Circle Gauge
+// ══════════════════════════════════════════════════════════════════════════════
+function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) {
+  const R = 80
+  const CX = 100
+  const CY = 100
+  const clamped = Math.min(100, Math.max(0, score))
 
-      {result && (
-        <section className="results" aria-live="polite">
-          <div className="results-header">
-            <span className="badge">{formatDocType(result.document_type)}</span>
-            <span
-              className="risk-label"
-              style={{
-                color: riskColor,
-                background: `${riskColor}18`,
-                border: `1px solid ${riskColor}55`,
-              }}
-            >
-              {result.risk_level} risk
-            </span>
-          </div>
+  // angle: 0 score → π (left), 100 score → 0 (right)
+  const angle = Math.PI * (1 - clamped / 100)
+  const ex = CX + R * Math.cos(angle)
+  const ey = CY - R * Math.sin(angle)
+  const largeArc = clamped > 50 ? 1 : 0
 
-          <div className="risk-score-block">
-            <div
-              className="risk-ring"
-              aria-label={`Risk score ${result.risk_score} out of 100`}
-            >
-              <svg width="88" height="88" viewBox="0 0 88 88">
-                <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" strokeWidth="8" />
-                <circle
-                  cx="44"
-                  cy="44"
-                  r="36"
-                  fill="none"
-                  stroke={riskColor}
-                  strokeWidth="8"
-                  strokeLinecap="round"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={ringOffset}
-                />
-              </svg>
-              <span className="risk-ring-value">{result.risk_score}</span>
+  const fillPath =
+    clamped === 0
+      ? ''
+      : `M ${CX - R} ${CY} A ${R} ${R} 0 ${largeArc} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`
+
+  const riskColor =
+    level === 'low' ? '#34d399' : level === 'medium' ? '#fbbf24' : '#ef4444'
+
+  // Pointer rotates from -180° (score=0) to 0° (score=100)
+  const pointerDeg = -180 + clamped * 1.8
+
+  return (
+    <div className="gauge-wrap">
+      <svg
+        viewBox="0 0 200 110"
+        className="gauge-svg"
+        aria-label={`Risk score ${score} out of 100`}
+      >
+        <defs>
+          <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#34d399" />
+            <stop offset="50%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#ef4444" />
+          </linearGradient>
+          <filter id="gauge-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Track */}
+        <path
+          d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`}
+          fill="none"
+          stroke="url(#gauge-grad)"
+          strokeWidth="10"
+          strokeLinecap="round"
+          opacity="0.2"
+        />
+
+        {/* Fill arc */}
+        {fillPath && (
+          <path
+            d={fillPath}
+            fill="none"
+            stroke={riskColor}
+            strokeWidth="10"
+            strokeLinecap="round"
+            filter="url(#gauge-glow)"
+          />
+        )}
+
+        {/* Pointer arrow */}
+        <g style={{ transformOrigin: `${CX}px ${CY}px`, transform: `rotate(${pointerDeg}deg)` }}>
+          <polygon
+            points={`${CX + R - 16},${CY} ${CX + R + 2},${CY - 5} ${CX + R + 2},${CY + 5}`}
+            fill={riskColor}
+          />
+        </g>
+
+        {/* Score text */}
+        <text
+          x={CX}
+          y={CY - 6}
+          textAnchor="middle"
+          fill={riskColor}
+          fontSize="28"
+          fontWeight="800"
+          fontFamily="Inter, sans-serif"
+        >
+          {(score / 10).toFixed(1)}
+        </text>
+        <text
+          x={CX}
+          y={CY + 14}
+          textAnchor="middle"
+          fill="var(--text-muted)"
+          fontSize="11"
+          fontWeight="500"
+          fontFamily="Inter, sans-serif"
+        >
+          / 10
+        </text>
+      </svg>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Result Dashboard
+// ══════════════════════════════════════════════════════════════════════════════
+function ResultDashboard({
+  result,
+  file,
+  previewUrl,
+  onReset,
+}: {
+  result: AnalysisResult
+  file: File
+  previewUrl: string | null
+  onReset: () => void
+}) {
+  const [explanationOpen, setExplanationOpen] = useState(false)
+  const riskColor = getRiskColor(result.risk_level)
+  const isMediumPlus = result.risk_level !== 'low'
+  const isHigh = result.risk_level === 'high'
+
+  const pillClass =
+    result.risk_level === 'low'
+      ? 'risk-pill risk-pill--low'
+      : result.risk_level === 'medium'
+        ? 'risk-pill risk-pill--medium'
+        : 'risk-pill risk-pill--high'
+
+  return (
+    <div className="result-dashboard">
+      {/* ── Left column ── */}
+      <div className="result-col result-col--left">
+        {/* Doc Card */}
+        <div className="result-card doc-card" style={{ '--delay': '0ms' } as React.CSSProperties}>
+          <div className="doc-card-header">
+            <div>
+              <h2 className="doc-card-title">Document Risk Analysis</h2>
+              <p className="doc-card-filename">{file.name}</p>
+              <p className="doc-card-risk" style={{ color: riskColor }}>
+                {result.risk_level} risk
+              </p>
             </div>
-            <div className="risk-bar-wrap">
-              <div className="risk-bar-label">
-                <span>Risk score</span>
-                <span>{result.risk_score} / 100</span>
-              </div>
-              <div className="risk-bar-track">
-                <div
-                  className="risk-bar-fill"
-                  style={{ width: `${result.risk_score}%`, background: riskColor }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="section-title">Summary</h2>
-            <p className="summary-box">{result.summary}</p>
-          </div>
-
-          <div>
-            <h2 className="section-title">Red flags</h2>
-            {result.red_flags.length > 0 ? (
-              <ul className="flag-list">
-                {result.red_flags.map((flag, i) => (
-                  <li key={`${flag}-${i}`}>
-                    <AlertTriangle size={18} />
-                    <span>{flag}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="flag-empty">No red flags detected.</p>
-            )}
-          </div>
-
-          <div>
-            <button
-              type="button"
-              className="explanation-toggle"
-              onClick={() => setExplanationOpen((o) => !o)}
-              aria-expanded={explanationOpen}
-            >
-              <span>Detailed explanation</span>
-              {explanationOpen ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            <button className="btn btn-ghost btn-sm" onClick={onReset}>
+              <RotateCcw size={14} />
+              Analyze
             </button>
-            {explanationOpen && (
-              <div className="explanation-body">{result.explanation}</div>
-            )}
           </div>
 
-          <div>
-            <h2 className="section-title">Recommended action</h2>
-            <div className="action-box">
-              <Lightbulb size={20} />
-              <p>{result.recommended_action}</p>
+          {/* Gauge + Preview */}
+          <div className="gauge-preview-row">
+            <HalfCircleGauge score={result.risk_score} level={result.risk_level} />
+            <div className="doc-preview">
+              {file.type.startsWith('image/') && previewUrl ? (
+                <img src={previewUrl} alt="Document preview" />
+              ) : (
+                <FileText size={40} strokeWidth={1.25} />
+              )}
             </div>
           </div>
 
-          <button type="button" className="btn btn-ghost" onClick={clearFile}>
-            Analyze another document
+          {/* Risk Summary Grid */}
+          <div className="risk-summary-grid">
+            <div className="risk-cell">
+              <span className="risk-cell__label">Document Type</span>
+              <span className="risk-cell__value">{formatDocType(result.document_type)}</span>
+            </div>
+            <div className="risk-cell">
+              <span className="risk-cell__label">Risk Level</span>
+              <span className={pillClass}>{result.risk_level}</span>
+            </div>
+            <div className="risk-cell">
+              <span className="risk-cell__label">Risk Score</span>
+              <span
+                className="risk-cell__value risk-cell__value--score"
+                style={{ color: riskColor }}
+              >
+                {(result.risk_score / 10).toFixed(1)}{' '}
+                <span className="risk-cell__unit">/ 10</span>
+              </span>
+            </div>
+            <div className="risk-cell">
+              <span className="risk-cell__label">Summary</span>
+              <span className="risk-cell__value risk-cell__value--clamp">{result.summary}</span>
+            </div>
+          </div>
+
+          {/* Red Flags */}
+          {result.red_flags.length > 0 && (
+            <div className="red-flags">
+              <h3 className="section-label">Key Red Flags</h3>
+              <ul className="flag-list">
+                {result.red_flags.map((flag, i) => {
+                  const { lead, detail } = parseFlag(flag)
+                  return (
+                    <li
+                      key={`flag-${i}`}
+                      className="flag-item"
+                      style={{
+                        borderLeftColor: riskColor,
+                        animationDelay: `${i * 70}ms`,
+                      }}
+                    >
+                      <AlertTriangle size={15} style={{ color: riskColor }} />
+                      <span>
+                        <strong>{lead}</strong>
+                        {detail && <span className="flag-detail"> ({detail})</span>}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Explanation Accordion */}
+        <div
+          className="result-card"
+          style={{ '--delay': '80ms' } as React.CSSProperties}
+        >
+          <button
+            className="explanation-toggle"
+            onClick={() => setExplanationOpen((o) => !o)}
+            aria-expanded={explanationOpen}
+          >
+            <span>Detailed Explanation</span>
+            {explanationOpen ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
           </button>
-        </section>
-      )}
+          {explanationOpen && (
+            <div className="explanation-body">{result.explanation}</div>
+          )}
+        </div>
+
+        <button className="btn btn-ghost" onClick={onReset}>
+          <RotateCcw size={15} />
+          Analyze another document
+        </button>
+      </div>
+
+      {/* ── Right column ── */}
+      <div className="result-col result-col--right">
+        {/* Findings Card */}
+        <div
+          className="result-card findings-card"
+          style={{ '--delay': '50ms' } as React.CSSProperties}
+        >
+          <div className="findings-header">
+            <div className="findings-icon-tile">
+              <ScanSearch size={17} />
+            </div>
+            <div>
+              <h3 className="findings-title">Analysis Findings</h3>
+              <p className="findings-sub">Explanation &amp; action</p>
+            </div>
+          </div>
+          {result.red_flags.length > 0 ? (
+            <ul className="findings-list">
+              {result.red_flags.map((flag, i) => {
+                const { lead } = parseFlag(flag)
+                return (
+                  <li key={`finding-${i}`} className="findings-item">
+                    <span className="findings-bullet" style={{ background: riskColor }} />
+                    <span>
+                      <strong>{lead}</strong>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="findings-empty">No significant anomalies detected.</p>
+          )}
+        </div>
+
+        {/* Action Card */}
+        <div
+          className={`result-card action-card${isMediumPlus ? ' action-card--danger' : ' action-card--safe'}`}
+          style={{ '--delay': '110ms' } as React.CSSProperties}
+        >
+          <div className="action-header">
+            {isMediumPlus ? (
+              <AlertTriangle size={19} />
+            ) : (
+              <ShieldCheck size={19} />
+            )}
+            <h3 className="action-title">Recommended Action</h3>
+          </div>
+          <p className="action-body">{result.recommended_action}</p>
+          <button
+            className={`btn action-cta${isHigh ? ' btn-danger' : isMediumPlus ? ' btn-warning' : ' btn-safe'}`}
+          >
+            {isMediumPlus ? 'Flag for Manual Review' : 'Approve Document'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// History / Reports / Settings tabs
+// ══════════════════════════════════════════════════════════════════════════════
+function HistoryTab() {
+  return (
+    <div className="placeholder-tab">
+      <div className="placeholder-card">
+        <div className="placeholder-icon">
+          <History size={30} strokeWidth={1.25} />
+        </div>
+        <h2>No analysis history yet</h2>
+        <p>
+          Your analyzed documents will appear here. Upload a document in the
+          Analyze tab to get started.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ReportsTab() {
+  return (
+    <div className="placeholder-tab">
+      <div className="placeholder-card">
+        <div className="placeholder-icon">
+          <ClipboardList size={30} strokeWidth={1.25} />
+        </div>
+        <h2>Reports coming soon</h2>
+        <p>
+          Aggregate risk reports and analytics for your organization will be
+          available here.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function SettingsTab({
+  theme,
+  onToggleTheme,
+}: {
+  theme: Theme
+  onToggleTheme: () => void
+}) {
+  return (
+    <div className="settings-tab">
+      <div className="settings-card">
+        {/* Appearance */}
+        <div className="settings-row">
+          <div className="settings-row__info">
+            <p className="settings-row__label">Appearance</p>
+            <p className="settings-row__sub">Choose your preferred color theme</p>
+          </div>
+          <div className="theme-pill-switcher">
+            <button
+              className={`theme-pill${theme === 'light' ? ' theme-pill--active' : ''}`}
+              onClick={() => theme !== 'light' && onToggleTheme()}
+            >
+              <Sun size={13} />
+              Light
+            </button>
+            <button
+              className={`theme-pill${theme === 'dark' ? ' theme-pill--active' : ''}`}
+              onClick={() => theme !== 'dark' && onToggleTheme()}
+            >
+              <Moon size={13} />
+              Dark
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-divider" />
+
+        {/* API Endpoint */}
+        <div className="settings-row">
+          <div className="settings-row__info">
+            <p className="settings-row__label">API Endpoint</p>
+            <p className="settings-row__sub">Backend analysis server</p>
+          </div>
+          <code className="settings-endpoint">
+            {import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'}
+          </code>
+        </div>
+
+        <div className="settings-divider" />
+
+        {/* About */}
+        <div className="settings-row">
+          <div className="settings-row__info">
+            <p className="settings-row__label">About DocRisk</p>
+            <p className="settings-row__sub">
+              AI-powered fraud detection for Sri Lankan documents. Analyzes job offers,
+              land deeds, visas, and more using Gemini 1.5 Flash.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
