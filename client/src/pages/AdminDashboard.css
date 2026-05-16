@@ -1,8 +1,23 @@
 .admin-page {
   max-width: 960px;
   margin: 0 auto;
-  padding: 0.5rem 0 2rem;
+  padding: clamp(0.85rem, 2vw, 1.5rem) clamp(0.85rem, 3vw, 2rem)
+    clamp(1.75rem, 4vw, 2.75rem);
+  border-radius: clamp(22px, 3.5vw, 32px);
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 28px 72px -40px rgba(0, 0, 0, 0.5);
   animation: fadeUp 0.35s ease both;
+}
+
+[data-theme='light'] .admin-page {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.94) inset,
+    0 24px 64px -36px rgba(15, 23, 42, 0.12);
 }
 
 .admin-header {
@@ -40,7 +55,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.1rem;
+  box-shadow: 0 14px 40px -28px rgba(0, 0, 0, 0.38);
   transition: background 0.35s ease, border-color 0.35s ease;
+}
+
+[data-theme='light'] .admin-metric-card {
+  box-shadow: 0 12px 40px -26px rgba(15, 23, 42, 0.08);
 }
 
 .admin-metric-card__label {
@@ -76,7 +96,12 @@
   border-radius: var(--radius);
   padding: 1.25rem 1.35rem;
   margin-bottom: 1.25rem;
+  box-shadow: 0 16px 44px -30px rgba(0, 0, 0, 0.35);
   transition: background 0.35s ease, border-color 0.35s ease;
+}
+
+[data-theme='light'] .admin-panel {
+  box-shadow: 0 14px 40px -26px rgba(15, 23, 42, 0.08);
 }
 
 .admin-panel__title {
@@ -181,10 +206,28 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 280px;
+  min-height: min(72vh, 520px);
   gap: 0.75rem;
   color: var(--text-muted);
   text-align: center;
+  margin: 1rem auto;
+  max-width: 520px;
+  padding: clamp(2rem, 5vw, 3rem);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 22px 56px -32px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='light'] .admin-loading,
+[data-theme='light'] .admin-denied {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.94) inset,
+    0 20px 50px -28px rgba(15, 23, 42, 0.11);
 }
 
 .admin-page .spin {

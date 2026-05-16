@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import {
@@ -10,7 +10,6 @@ import {
 } from 'firebase/auth'
 import {
   AlertTriangle,
-  Bell,
   Calendar,
   ClipboardList,
   ChevronDown,
@@ -129,8 +128,16 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="app-loading">
-        <div className="spinner" />
+      <div className="app-loading" role="status" aria-busy="true">
+        <div className="app-loading__ambient" aria-hidden />
+        <div className="app-loading__rings" aria-hidden>
+          <span className="app-loading__orbit" />
+          <span className="app-loading__orbit app-loading__orbit--delayed" />
+        </div>
+        <div className="app-loading__pulse" aria-hidden />
+        <div className="app-loading__core">
+          <div className="spinner" aria-hidden />
+        </div>
       </div>
     )
   }
@@ -289,6 +296,8 @@ function MainLayout({
   const [activeTab, setActiveTab] = useState<Tab>('analyze')
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const profileWrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -296,18 +305,31 @@ function MainLayout({
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    if (!profileOpen) return
+    function handleDocMouse(e: MouseEvent) {
+      const el = profileWrapRef.current
+      if (el && !el.contains(e.target as Node)) setProfileOpen(false)
+    }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setProfileOpen(false)
+    }
+    document.addEventListener('mousedown', handleDocMouse)
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleDocMouse)
+      window.removeEventListener('keydown', handleEsc)
+    }
+  }, [profileOpen])
+
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
     setMobileOpen(false)
+    setProfileOpen(false)
   }
 
   return (
     <div className="app-root">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onLogout={() => signOut(auth)}
-      />
       <div className="main-col">
         <TopNav
           activeTab={activeTab}
@@ -318,6 +340,17 @@ function MainLayout({
           user={user}
           mobileOpen={mobileOpen}
           onMobileToggle={() => setMobileOpen((o) => !o)}
+          profileWrapRef={profileWrapRef}
+          profileOpen={profileOpen}
+          onProfileToggle={() => {
+            setMobileOpen(false)
+            setProfileOpen((o) => !o)
+          }}
+          onProfileSettings={() => handleTabChange('settings')}
+          onProfileLogout={() => {
+            setProfileOpen(false)
+            void signOut(auth)
+          }}
         />
         <MobileMenu
           open={mobileOpen}
@@ -339,67 +372,12 @@ function MainLayout({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Sidebar
-// ══════════════════════════════════════════════════════════════════════════════
-const SIDEBAR_NAV: { id: Tab; icon: React.ReactNode; label: string }[] = [
-  { id: 'analyze', icon: <ScanSearch size={20} />, label: 'Analyze' },
-  { id: 'history', icon: <FileText size={20} />, label: 'History' },
-  { id: 'reports', icon: <ClipboardList size={20} />, label: 'Reports' },
-  { id: 'settings', icon: <Settings size={20} />, label: 'Settings' },
-]
-
-function Sidebar({
-  activeTab,
-  onTabChange,
-  onLogout,
-}: {
-  activeTab: Tab
-  onTabChange: (t: Tab) => void
-  onLogout: () => void
-}) {
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-top">
-        <div className="sidebar-logo">
-          <ShieldCheck size={20} strokeWidth={1.5} />
-        </div>
-        {SIDEBAR_NAV.map((item) => (
-          <button
-            key={item.id}
-            className={`sidebar-item${activeTab === item.id ? ' sidebar-item--active' : ''}`}
-            onClick={() => onTabChange(item.id)}
-            title={item.label}
-            aria-label={item.label}
-          >
-            {item.icon}
-          </button>
-        ))}
-      </div>
-      <div className="sidebar-bottom">
-        <button className="sidebar-item" title="Notifications" aria-label="Notifications">
-          <Bell size={20} />
-        </button>
-        <button
-          className="sidebar-item sidebar-item--danger"
-          onClick={onLogout}
-          title="Log out"
-          aria-label="Log out"
-        >
-          <LogOut size={20} />
-        </button>
-      </div>
-    </aside>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // Top Nav
 // ══════════════════════════════════════════════════════════════════════════════
-const NAV_TABS: { id: Tab; label: string }[] = [
+const MAIN_NAV_TABS: { id: Tab; label: string }[] = [
   { id: 'analyze', label: 'Analyze' },
   { id: 'history', label: 'History' },
   { id: 'reports', label: 'Reports' },
-  { id: 'settings', label: 'Settings' },
 ]
 
 function TopNav({
@@ -411,6 +389,11 @@ function TopNav({
   user,
   mobileOpen,
   onMobileToggle,
+  profileWrapRef,
+  profileOpen,
+  onProfileToggle,
+  onProfileSettings,
+  onProfileLogout,
 }: {
   activeTab: Tab
   onTabChange: (t: Tab) => void
@@ -420,7 +403,14 @@ function TopNav({
   user: User
   mobileOpen: boolean
   onMobileToggle: () => void
+  profileWrapRef: React.RefObject<HTMLDivElement | null>
+  profileOpen: boolean
+  onProfileToggle: () => void
+  onProfileSettings: () => void
+  onProfileLogout: () => void
 }) {
+  const displayEmail = user.email ?? 'Signed in'
+
   return (
     <nav className={`top-nav${scrolled ? ' scrolled' : ''}`}>
       <div className="nav-brand">
@@ -432,7 +422,7 @@ function TopNav({
       </div>
 
       <div className="nav-tabs">
-        {NAV_TABS.map((tab) => (
+        {MAIN_NAV_TABS.map((tab) => (
           <button
             key={tab.id}
             className={`nav-tab${activeTab === tab.id ? ' nav-tab--active' : ''}`}
@@ -447,11 +437,51 @@ function TopNav({
         <button className="theme-toggle" onClick={onToggleTheme} aria-label="Toggle theme">
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <div className="user-chip">
-          <div className="user-avatar">
-            {(user.email?.[0] ?? 'U').toUpperCase()}
-          </div>
-          <span className="user-name">{user.email}</span>
+        <div className="profile-menu" ref={profileWrapRef}>
+          <button
+            type="button"
+            className={`user-chip-trigger${profileOpen ? ' user-chip-trigger--open' : ''}${activeTab === 'settings' ? ' user-chip-trigger--settings' : ''}`}
+            aria-expanded={profileOpen}
+            aria-haspopup="menu"
+            id="profile-menu-trigger"
+            onClick={onProfileToggle}
+          >
+            <div className="user-avatar" aria-hidden>
+              {(displayEmail?.[0] ?? 'U').toUpperCase()}
+            </div>
+            <span className="user-name">{displayEmail}</span>
+            <ChevronDown
+              size={16}
+              className={`user-chip-trigger__caret${profileOpen ? ' user-chip-trigger__caret--open' : ''}`}
+              aria-hidden
+            />
+          </button>
+          {profileOpen && (
+            <div className="profile-menu__dropdown" role="menu" aria-labelledby="profile-menu-trigger">
+              <div className="profile-menu__header">
+                <p className="profile-menu__hint">Signed in as</p>
+                <p className="profile-menu__email">{displayEmail}</p>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                className={`profile-menu__item${activeTab === 'settings' ? ' profile-menu__item--active' : ''}`}
+                onClick={onProfileSettings}
+              >
+                <Settings size={17} aria-hidden />
+                Settings
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="profile-menu__item profile-menu__item--danger"
+                onClick={onProfileLogout}
+              >
+                <LogOut size={17} aria-hidden />
+                Log out
+              </button>
+            </div>
+          )}
         </div>
         <button className="hamburger" onClick={onMobileToggle} aria-label="Toggle menu">
           {mobileOpen ? <X size={19} /> : <Menu size={19} />}
@@ -477,7 +507,7 @@ function MobileMenu({
 }) {
   return (
     <div className={`mobile-menu${open ? ' mobile-menu--open' : ''}`}>
-      {NAV_TABS.map((tab) => (
+      {MAIN_NAV_TABS.map((tab) => (
         <button
           key={tab.id}
           className={`mobile-menu-item${activeTab === tab.id ? ' mobile-menu-item--active' : ''}`}
@@ -486,6 +516,13 @@ function MobileMenu({
           {tab.label}
         </button>
       ))}
+      <button
+        type="button"
+        className={`mobile-menu-item${activeTab === 'settings' ? ' mobile-menu-item--active' : ''}`}
+        onClick={() => onTabChange('settings')}
+      >
+        Settings
+      </button>
       <button className="mobile-menu-item mobile-menu-item--danger" onClick={onLogout}>
         Log out
       </button>

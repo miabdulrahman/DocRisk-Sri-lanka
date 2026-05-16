@@ -1,8 +1,8 @@
 /* ── Dark theme (default) ──────────────────────────────────────────────────── */
 :root,
 [data-theme='dark'] {
-  --bg: #0a0e1a;
-  --bg-2: #0f1421;
+  --bg: #070a12;
+  --bg-2: #0c101c;
   --surface: #151b2c;
   --surface-2: #1c2336;
   --surface-3: #232b42;
@@ -18,19 +18,24 @@
   --risk-low: #34d399;
   --risk-medium: #fbbf24;
   --risk-high: #ef4444;
-  --nav-bg: rgba(10, 14, 26, 0.85);
+  --nav-bg: rgba(7, 10, 18, 0.72);
   --radius: 16px;
   --radius-sm: 10px;
   --radius-xs: 6px;
-  --sidebar-w: 64px;
+  --sidebar-w: 0px;
   --nav-h: 64px;
+  --backdrop-grid-line: rgba(148, 163, 184, 0.055);
+  --backdrop-glow-a: rgba(45, 212, 191, 0.12);
+  --backdrop-glow-b: rgba(129, 140, 248, 0.09);
+  --backdrop-glow-c: rgba(45, 212, 191, 0.05);
+  --security-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360'%3E%3Cg fill='none' stroke='%232dd4bf' stroke-opacity='0.085' stroke-width='1'%3E%3Cpath d='M180 22 L318 93 V229 C318 302 180 348 180 348 S42 302 42 229 V93 Z'/%3E%3Cpath d='M180 86 L274 139 V235 C274 276 180 296 180 296 S86 276 86 235 V139 Z' stroke-opacity='0.055'/%3E%3Ccircle cx='180' cy='180' r='118' stroke-opacity='0.04'/%3E%3C/g%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
 /* ── Light theme ───────────────────────────────────────────────────────────── */
 [data-theme='light'] {
-  --bg: #f3f5f9;
-  --bg-2: #eaecf2;
+  --bg: #eef1f8;
+  --bg-2: #e8ebf4;
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --surface-3: #f1f5f9;
@@ -46,7 +51,12 @@
   --risk-low: #16a34a;
   --risk-medium: #d97706;
   --risk-high: #dc2626;
-  --nav-bg: rgba(243, 245, 249, 0.85);
+  --nav-bg: rgba(238, 241, 248, 0.78);
+  --backdrop-grid-line: rgba(15, 23, 42, 0.06);
+  --backdrop-glow-a: rgba(13, 148, 136, 0.11);
+  --backdrop-glow-b: rgba(99, 102, 241, 0.08);
+  --backdrop-glow-c: rgba(13, 148, 136, 0.05);
+  --security-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360' viewBox='0 0 360 360'%3E%3Cg fill='none' stroke='%230f766e' stroke-opacity='0.09' stroke-width='1'%3E%3Cpath d='M180 22 L318 93 V229 C318 302 180 348 180 348 S42 302 42 229 V93 Z'/%3E%3Cpath d='M180 86 L274 139 V235 C274 276 180 296 180 296 S86 276 86 235 V139 Z' stroke-opacity='0.055'/%3E%3Ccircle cx='180' cy='180' r='118' stroke-opacity='0.035'/%3E%3C/g%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -59,6 +69,10 @@
   padding: 0;
 }
 
+html {
+  min-height: 100%;
+}
+
 html,
 body {
   height: 100%;
@@ -69,18 +83,54 @@ body {
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  background: var(--bg);
+  position: relative;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 130% 85% at 50% -28%, var(--backdrop-glow-a), transparent 52%),
+    radial-gradient(ellipse 55% 42% at 100% 0%, var(--backdrop-glow-b), transparent 48%),
+    radial-gradient(ellipse 48% 36% at 0% 100%, var(--backdrop-glow-c), transparent 42%);
+  background-attachment: fixed;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  transition: background 0.35s ease, color 0.35s ease;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--backdrop-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--backdrop-grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 42%, #000 15%, transparent 72%);
+  mask-image: radial-gradient(ellipse 85% 70% at 50% 42%, #000 15%, transparent 72%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+  background-image: var(--security-pattern);
+  background-size: 360px 360px;
+  -webkit-mask-image: radial-gradient(ellipse 100% 80% at 50% 50%, #000 0%, transparent 68%);
+  mask-image: radial-gradient(ellipse 100% 80% at 50% 50%, #000 0%, transparent 68%);
 }
 
 #root {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-height: 100vh;
   display: flex;
+  background: transparent;
 }
 
 h1,

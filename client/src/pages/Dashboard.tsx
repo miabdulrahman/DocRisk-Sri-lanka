@@ -139,35 +139,57 @@ export function Dashboard({ user, outputLang, onResult, onAnalyzingChange }: Das
   return (
     <>
       {!file && (
-        <div className="hero">
-          <div className="hero-eyebrow">
-            <span className="hero-dot" />
-            Powered by Gemini 2.5 Flash
-          </div>
-          <h1 className="hero-heading">
-            Detect Document<br />
-            <span className="hero-gradient">Fraud Instantly</span>
-          </h1>
-          <p className="hero-sub">
-            Upload any Sri Lankan document — job offers, land deeds, visa letters, or
-            certificates — and get an AI-powered fraud risk assessment in seconds.
-          </p>
-          <div className="hero-chips">
-            {[
-              { icon: <Zap size={13} />, label: 'Gemini 2.5' },
-              { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
-              { icon: <FileText size={13} />, label: 'PDF · JPG · PNG · DOCX' },
-              { icon: <Upload size={13} />, label: 'Max 10 MB' },
-            ].map((chip, i) => (
-              <span
-                key={chip.label}
-                className="hero-chip"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                {chip.icon}
-                {chip.label}
-              </span>
-            ))}
+        <div className="analyze-hero-spline">
+          <div className="analyze-hero-spline__grid">
+            <div className="analyze-hero-spline__intro">
+              <div className="hero">
+                <div className="hero-eyebrow">
+                  <span className="hero-dot" />
+                  Powered by Gemini 2.5 Flash
+                </div>
+                <h1 className="hero-heading">
+                  Detect Document<br />
+                  <span className="hero-gradient">Fraud Instantly</span>
+                </h1>
+                <p className="hero-sub">
+                  Upload any Sri Lankan document — job offers, land deeds, visa letters, or
+                  certificates — and get an AI-powered fraud risk assessment in seconds.
+                </p>
+                <div className="hero-chips">
+                  {[
+                    { icon: <Zap size={13} />, label: 'Gemini 2.5' },
+                    { icon: <ShieldCheck size={13} />, label: 'Sri Lanka Docs' },
+                    { icon: <FileText size={13} />, label: 'PDF · JPG · PNG · DOCX' },
+                    { icon: <Upload size={13} />, label: 'Max 10 MB' },
+                  ].map((chip, i) => (
+                    <span
+                      key={chip.label}
+                      className="hero-chip"
+                      style={{ animationDelay: `${i * 80}ms` }}
+                    >
+                      {chip.icon}
+                      {chip.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <aside className="analyze-hero-spline__aside" aria-hidden>
+              <div className="analyze-hero-spline__sticky">
+                <div className="analyze-hero-spline__beam" />
+                <div className="analyze-hero-spline__orbit" />
+                <div className="analyze-hero-spline__orbit analyze-hero-spline__orbit--inner" />
+                <div className="analyze-hero-spline__plinth" />
+                <img
+                  className="analyze-hero-spline__art"
+                  src={`${import.meta.env.BASE_URL}hero-scam-guard.svg`}
+                  alt=""
+                  width={520}
+                  height={620}
+                  decoding="async"
+                />
+              </div>
+            </aside>
           </div>
         </div>
       )}

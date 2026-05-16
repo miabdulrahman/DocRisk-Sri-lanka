@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 620" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="hs-g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.85"/>
+    </linearGradient>
+    <linearGradient id="hs-g2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="hs-glass" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02"/>
+    </linearGradient>
+    <radialGradient id="hs-hub" cx="50%" cy="38%" r="55%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.28"/>
+      <stop offset="70%" stop-color="#818cf8" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="hs-soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Ambient halo -->
+  <ellipse cx="260" cy="210" rx="210" ry="190" fill="url(#hs-hub)"/>
+  <!-- Ghost card stack -->
+  <g opacity=".45">
+    <rect x="98" y="118" width="280" height="360" rx="18" stroke="#94a3b8" stroke-opacity=".25" stroke-width="2"/>
+    <rect x="118" y="138" width="280" height="360" rx="18" stroke="#64748b" stroke-opacity=".2" stroke-width="1"/>
+  </g>
+  <!-- Main document panel -->
+  <rect x="128" y="98" width="288" height="384" rx="22" stroke="url(#hs-g1)" stroke-width="2.5" fill="rgba(21,27,44,.55)" filter="url(#hs-soft)"/>
+  <rect x="146" y="116" width="252" height="52" rx="10" fill="url(#hs-glass)"/>
+  <rect x="146" y="184" width="188" height="10" rx="4" fill="#64748b" fill-opacity=".45"/>
+  <rect x="146" y="204" width="220" height="8" rx="3" fill="#64748b" fill-opacity=".28"/>
+  <rect x="146" y="222" width="206" height="8" rx="3" fill="#64748b" fill-opacity=".28"/>
+  <rect x="146" y="240" width="178" height="8" rx="3" fill="#64748b" fill-opacity=".2"/>
+  <!-- Alert strip -->
+  <rect x="146" y="278" width="252" height="44" rx="10" stroke="#f97316" stroke-opacity=".55" fill="rgba(249,115,22,.12)"/>
+  <path fill="url(#hs-g2)" d="m168 304 8-13 8 13H168z"/>
+  <rect x="195" y="292" width="174" height="9" rx="3" fill="#fbbf24" fill-opacity=".75"/>
+  <rect x="195" y="306" width="138" height="7" rx="2" fill="#fde68a" fill-opacity=".4"/>
+  <!-- Phishing envelope -->
+  <g transform="translate(290 368) rotate(-8)">
+    <rect width="154" height="108" rx="12" stroke="#cbd5e1" stroke-opacity=".55" stroke-width="2" fill="rgba(15,23,42,.42)"/>
+    <path stroke="#ef4444" stroke-opacity=".75" stroke-width="2.2" stroke-linecap="round" d="m18 42 118-26M18 74l42-38 34 38 43-76"/>
+    <circle cx="124" cy="34" r="16" stroke="#f87171" stroke-width="2" fill="rgba(239,68,68,.22)"/>
+    <path stroke="#fca5a5" stroke-linecap="round" stroke-width="2.5" d="M116 37h16M124 29v16"/>
+    <rect x="10" y="86" width="96" height="7" rx="2" fill="#94a3b8" fill-opacity=".35"/>
+  </g>
+  <!-- SMS phishing bubble -->
+  <g transform="translate(132 392) rotate(6)">
+    <rect width="146" height="72" rx="16" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.8" fill="rgba(99,102,241,.12)"/>
+    <rect x="18" y="18" width="110" height="8" rx="3" fill="#a5b4fc" fill-opacity=".5"/>
+    <rect x="18" y="34" width="86" height="7" rx="2" fill="#94a3b8" fill-opacity=".35"/>
+    <circle cx="24" cy="56" r="5" fill="#34d399" fill-opacity=".75"/>
+    <rect x="34" y="51" width="92" height="9" rx="2" fill="#cbd5e1" fill-opacity=".38"/>
+    <rect x="34" y="42" width="58" height="6" rx="2" fill="#fde68a" fill-opacity=".25"/>
+  </g>
+  <!-- Verified shield crest -->
+  <g transform="translate(184 438)">
+    <path stroke="url(#hs-g1)" stroke-width="3" stroke-linejoin="round" fill="rgba(13,148,136,.15)" d="M76 6 134 34v72c0 44-58 74-58 74S18 146 18 106V34L76 6Z"/>
+    <path stroke="#f1f5f9" stroke-opacity=".85" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" d="m56 118 26 22 52-68"/>
+    <circle cx="76" cy="84" r="38" stroke="#2dd4bf" stroke-opacity=".25" stroke-width="1"/>
+  </g>
+  <!-- Corner tech ticks -->
+  <g stroke="#2dd4bf" stroke-opacity=".35" stroke-width="1.4" stroke-linecap="round">
+    <path d="M108 488h42M442 488h-42M108 78v36M442 78v-36"/>
+  </g>
+</svg>
