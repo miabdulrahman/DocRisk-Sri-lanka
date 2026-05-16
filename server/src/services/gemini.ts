@@ -6,7 +6,7 @@ import { normalizeOutputLang } from "../lib/outputLang.js";
 
 export const DEFAULT_MODEL = "gemini-2.5-flash";
 const temperature = 0;
-const maxOutputTokens = 1400;
+const maxOutputTokens = 4096;
 
 const SYSTEM_PROMPT = `You are a forensic document fraud analyst specialized in Sri Lanka.
 You receive a document (image or PDF) that may contain Sinhala, Tamil, or English text and/or official seals.

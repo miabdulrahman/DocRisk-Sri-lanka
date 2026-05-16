@@ -163,8 +163,10 @@ router.post("/", upload.single("document"), async (req, res) => {
     // ── Deterministic pre-validation (NIC) ────────────────────────────────────
     const documentHint = readString(req.body?.documentHint);
     const nicNumber = readString(req.body?.nicNumber);
-    const hintYear =
-      parseHintYear(req.body?.hintYear) ?? parseHintYear(req.file.originalname);
+    // Only honor an explicit hintYear from the form. Filenames (e.g. WhatsApp
+    // capture dates like "WhatsApp Image 2026-05-17…") encode capture date,
+    // not birth year, and would otherwise false-positive as year conflicts.
+    const hintYear = parseHintYear(req.body?.hintYear);
 
     const preFailure = runNicPreValidation({
       documentHint,

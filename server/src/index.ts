@@ -64,6 +64,14 @@ function buildExpertTranscript(
   return lines.join("\n\n");
 }
 
+app.get("/", (_req: Request, res: Response) => {
+  res.json({
+    service: "DocRisk API",
+    message: "This is the backend API only. Open the web app at http://localhost:5173 (run npm run dev in client/).",
+    health: "/api/health",
+  });
+});
+
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({
     ok: true,
@@ -150,7 +158,7 @@ app.post(
       let response;
       try {
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: geminiModel,
           contents: [
             {
               inlineData: {
@@ -174,7 +182,7 @@ app.post(
         if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
           return res.status(500).json({
             success: false,
-            error: 'Gemini model "gemini-1.5-flash" is not available for this API key.',
+            error: `Configured Gemini model "${geminiModel}" is not available for this API key.`,
           });
         }
         throw err;
