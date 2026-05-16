@@ -32,6 +32,9 @@ import { ResultConfidence, ResultMetaBadges } from './components/ResultCard'
 import AdminDashboard from './pages/AdminDashboard'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
+import { ScamCard } from './components/ScamCard'
+import { ScamChatModal } from './components/ScamChatModal'
+import { SCAMS, type ScamEntry } from './utils/scamData'
 import type { AnalysisResult, OutputLang, RiskLevel } from './types'
 import './App.css'
 
@@ -494,6 +497,7 @@ function AnalyzeTab({ user }: { user: User }) {
   const [outputLang, setOutputLang] = useState<OutputLang>('english')
   const [analysis, setAnalysis] = useState<AnalysisCompletePayload | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [selectedScam, setSelectedScam] = useState<ScamEntry | null>(null)
 
   const clearAnalysis = () => {
     setAnalysis(null)
@@ -513,18 +517,47 @@ function AnalyzeTab({ user }: { user: User }) {
   }
 
   return (
-    <div className="analyze-tab">
-      <LanguageSelector value={outputLang} onChange={setOutputLang} />
-      {analyzing && <SkeletonLoader />}
-      <div className={analyzing ? 'analyze-tab__upload analyze-tab__upload--hidden' : 'analyze-tab__upload'}>
-        <Dashboard
-          user={user}
-          outputLang={outputLang}
-          onAnalyzingChange={setAnalyzing}
-          onResult={setAnalysis}
-        />
+    <>
+      {selectedScam && (
+        <ScamChatModal scam={selectedScam} onClose={() => setSelectedScam(null)} />
+      )}
+      <div className="analyze-tab">
+        <LanguageSelector value={outputLang} onChange={setOutputLang} />
+        {analyzing && <SkeletonLoader />}
+        <div className={analyzing ? 'analyze-tab__upload analyze-tab__upload--hidden' : 'analyze-tab__upload'}>
+          <Dashboard
+            user={user}
+            outputLang={outputLang}
+            onAnalyzingChange={setAnalyzing}
+            onResult={setAnalysis}
+          />
+        </div>
+
+        {!analyzing && (
+          <section className="scam-alert-section">
+            <div className="scam-alert-header">
+              <div className="scam-alert-header__icon">
+                <AlertTriangle size={15} />
+              </div>
+              <div>
+                <h2 className="scam-alert-header__title">Trending Scams in Sri Lanka</h2>
+                <p className="scam-alert-header__sub">Current active fraud schemes — click any card to learn more and chat with an AI expert</p>
+              </div>
+            </div>
+            <div className="scam-alert-grid">
+              {SCAMS.map((scam, i) => (
+                <ScamCard
+                  key={scam.id}
+                  scam={scam}
+                  onReadMore={setSelectedScam}
+                  index={i}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
-    </div>
+    </>
   )
 }
 

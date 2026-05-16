@@ -1382,6 +1382,65 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   SCAM ALERT CENTER
+══════════════════════════════════════════════════════════════════════════════ */
+.scam-alert-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  animation: fadeUp 0.45s ease both;
+  animation-delay: 0.12s;
+}
+
+.scam-alert-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.scam-alert-header__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--risk-high);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.scam-alert-header__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-h);
+  letter-spacing: -0.025em;
+  margin: 0 0 0.2rem;
+  transition: color 0.35s ease;
+}
+
+.scam-alert-header__sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  transition: color 0.35s ease;
+}
+
+.scam-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .scam-alert-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    PLACEHOLDER TABS
 ══════════════════════════════════════════════════════════════════════════════ */
 .placeholder-tab {
