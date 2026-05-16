@@ -1,6 +1,6 @@
 export type Severity = 'High' | 'Medium' | 'Low'
 
-export type OfficialScamSource = 'SLCERT' | 'Sri Lanka Police'
+export type OfficialScamSource = 'SLCERT' | 'Sri Lanka Police' | 'Google News'
 
 export interface ScamEntry {
   id: string

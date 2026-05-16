@@ -14,5 +14,27 @@ service cloud.firestore {
     match /config/admins {
       allow read, write: if false;
     }
+
+    // Guardian circles — each guardian has one circle
+    match /circles/{guardianId} {
+      allow read, write: if request.auth != null && request.auth.uid == guardianId;
+    }
+
+    // Protected members — sub-collection under their guardian's circle
+    match /circles/{guardianId}/members/{memberId} {
+      allow read, write: if request.auth != null && request.auth.uid == guardianId;
+    }
+
+    // Check requests — submitted by members (no auth needed, only requires valid circleId + memberToken)
+    match /check_requests/{requestId} {
+      allow create: if true;
+      allow read: if request.auth != null && resource.data.guardianId == request.auth.uid;
+      allow update: if request.auth != null && resource.data.guardianId == request.auth.uid;
+    }
+
+    // Guardian notifications
+    match /notifications/{guardianId}/items/{notifId} {
+      allow read, write: if request.auth != null && request.auth.uid == guardianId;
+    }
   }
 }

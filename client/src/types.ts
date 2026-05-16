@@ -77,3 +77,27 @@ export interface AdminStatsResponse {
   avgRiskScore?: number;
   error?: string;
 }
+
+export interface CircleMember {
+  id: string;
+  name: string;
+  phone: string;
+  relationship: 'grandmother' | 'grandfather' | 'child' | 'parent' | 'other';
+  memberToken: string;
+  checkLink: string;
+  addedAt: string;
+  totalChecks: number;
+  lastCheckAt: string | null;
+  isActive: boolean;
+}
+
+export interface GuardianNotification {
+  id: string;
+  type: 'check_completed' | 'member_added';
+  memberName: string;
+  checkType: 'link' | 'document';
+  riskLevel: 'low' | 'medium' | 'high' | null;
+  requestId: string;
+  read: boolean;
+  createdAt: string;
+}

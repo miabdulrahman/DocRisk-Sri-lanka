@@ -5,11 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "build:sw": "esbuild src/sw.ts --bundle --minify --outfile=public/sw.js",
+    "prebuild": "npm run generate:pwa-icons && npm run build:sw",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tabler/icons-react": "^3.17.0",
     "firebase": "^12.13.0",
     "lucide-react": "^1.16.0",
     "react": "^19.2.6",
@@ -22,10 +26,12 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "esbuild": "^0.28.0",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "sharp": "^0.34.5",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"

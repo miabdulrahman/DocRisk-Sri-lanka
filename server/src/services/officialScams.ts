@@ -5,10 +5,13 @@ const SLCERT_KB_URL = "https://www.cert.gov.lk/knowledge_base";
 const SLCERT_BASE = "https://www.cert.gov.lk/";
 const POLICE_FRAUD_RSS =
   "https://www.police.lk/?s=online+fraud&feed=rss2";
+const GOOGLE_NEWS_RSS =
+  "https://news.google.com/rss/search?q=%22sri+lanka%22+(scam+OR+fraud+OR+cyber+OR+phishing)&hl=en-LK&gl=LK&ceid=LK:en";
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const MAX_RESULTS = 12;
-const POLICE_LIMIT = 6;
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const MAX_RESULTS = 15;
+const POLICE_LIMIT = 5;
+const NEWS_LIMIT = 6;
 
 let cache: { expiresAt: number; scams: OfficialScamEntry[] } | null = null;
 
@@ -26,7 +29,10 @@ function decodeEntities(text: string): string {
 }
 
 function stripHtml(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+  // Decode entities first so entity-encoded tags (&lt;a&gt;) become real tags,
+  // then strip all tags, then decode any remaining entities.
+  const decoded = decodeEntities(html);
+  return decodeEntities(decoded.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
 }
 
 function parseSlcertDate(raw: string): string {
@@ -59,7 +65,7 @@ function inferCategory(title: string): string {
 }
 
 function inferSeverity(title: string, source: OfficialScamSource): ScamSeverity {
-  if (source === "Sri Lanka Police") return "High";
+  if (source === "Sri Lanka Police" || source === "Google News") return "High";
   const t = title.toLowerCase();
   if (
     t.includes("scam") ||
@@ -215,6 +221,40 @@ async function fetchPoliceAlerts(): Promise<OfficialScamEntry[]> {
     .map(policeEntry);
 }
 
+function googleNewsEntry(item: RssItem): OfficialScamEntry {
+  // Google News redirect URLs encode the real link; use as-is for now
+  const idSlug = item.link.replace(/[^a-z0-9]/gi, "").slice(-20) || String(Date.now());
+  const summary =
+    item.description.length > 320
+      ? `${item.description.slice(0, 317)}…`
+      : item.description;
+
+  return {
+    id: `gnews-${idSlug}`,
+    title: item.title,
+    category: inferCategory(item.title),
+    severity: inferSeverity(item.title, "Google News"),
+    description: summary || "Trending scam or fraud news from Sri Lanka.",
+    explanation: [
+      `Source: Google News — real-time trending news about scams and fraud in Sri Lanka.`,
+      item.description || item.title,
+      `Full article: ${item.link}`,
+      `Stay vigilant and report suspected fraud to SLCERT (info@cert.gov.lk) or the CID Cybercrime Division.`,
+    ].join("\n\n"),
+    lastUpdated: parseRssDate(item.pubDate),
+    source: "Google News",
+    sourceUrl: item.link,
+  };
+}
+
+async function fetchGoogleNewsAlerts(): Promise<OfficialScamEntry[]> {
+  const xml = await fetchText(GOOGLE_NEWS_RSS);
+  return parseRssItems(xml)
+    .filter(isFraudRelevant)
+    .slice(0, NEWS_LIMIT)
+    .map(googleNewsEntry);
+}
+
 function mergeAndSort(scams: OfficialScamEntry[]): OfficialScamEntry[] {
   const byId = new Map<string, OfficialScamEntry>();
   for (const scam of scams) {
@@ -235,14 +275,15 @@ export async function getOfficialTrendingScams(): Promise<{
   if (cache && cache.expiresAt > now) {
     return {
       scams: cache.scams,
-      sources: ["SLCERT", "Sri Lanka Police"],
+      sources: ["SLCERT", "Sri Lanka Police", "Google News"],
       cached: true,
     };
   }
 
-  const [slcertResult, policeResult] = await Promise.allSettled([
+  const [slcertResult, policeResult, newsResult] = await Promise.allSettled([
     fetchSlcertAlerts(),
     fetchPoliceAlerts(),
+    fetchGoogleNewsAlerts(),
   ]);
 
   const merged: OfficialScamEntry[] = [];
@@ -259,9 +300,15 @@ export async function getOfficialTrendingScams(): Promise<{
     console.error("[officialScams] Police RSS fetch failed:", policeResult.reason);
   }
 
+  if (newsResult.status === "fulfilled") {
+    merged.push(...newsResult.value);
+  } else {
+    console.error("[officialScams] Google News fetch failed:", newsResult.reason);
+  }
+
   if (merged.length === 0) {
     throw new Error(
-      "Could not load advisories from official sources (cert.gov.lk, police.lk). Please try again later.",
+      "Could not load advisories from official sources (cert.gov.lk, police.lk, Google News). Please try again later.",
     );
   }
 
@@ -271,6 +318,7 @@ export async function getOfficialTrendingScams(): Promise<{
   const sources: OfficialScamSource[] = [];
   if (slcertResult.status === "fulfilled") sources.push("SLCERT");
   if (policeResult.status === "fulfilled") sources.push("Sri Lanka Police");
+  if (newsResult.status === "fulfilled") sources.push("Google News");
 
   return { scams, sources, cached: false };
 }

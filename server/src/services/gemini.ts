@@ -238,3 +238,102 @@ export async function analyzeDocument(
 
   return result;
 }
+
+const LINK_ANALYSIS_PROMPT = `You are a fraud-awareness assistant helping people in Sri Lanka (often older adults) decide if a web link could be dangerous.
+
+Analyze ONLY the URL and any obvious cues you can infer from it (domain typos, suspicious TLDs, shortened links, fake bank/government names, etc.). Do NOT claim you visited the page.
+
+Return ONLY valid JSON with exactly these keys—no markdown:
+
+{
+  "document_type": "other",
+  "risk_score": integer 0-100,
+  "confidence": integer 0-100,
+  "risk_level": "low" | "medium" | "high",
+  "summary": one short sentence in plain English a child could understand,
+  "extracted_data": { "full_name": "", "document_id": "", "date_of_birth": "" },
+  "tamper_coordinates": [],
+  "red_flags": [ short strings, empty if none ],
+  "explanation": 2-3 short sentences in plain English—no jargon,
+  "recommended_action": one clear sentence: what to do next (ignore, ask family, call bank, etc.)
+}
+
+Use "high" risk for likely phishing or scams, "medium" for suspicious, "low" for probably harmless.`;
+
+export async function analyzeSuspiciousLink(url: string, outputLang = "english"): Promise<AnalysisResult> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("Server is missing GEMINI_API_KEY. Check server/.env");
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("That does not look like a valid web link. Copy the full address.");
+  }
+  if (!/^https?:$/i.test(parsedUrl.protocol)) {
+    throw new Error("Only http or https links can be checked.");
+  }
+
+  const lang = normalizeOutputLang(outputLang);
+  const langName = langMap[lang] ?? "English";
+  const langInstruction = `Write "summary", "explanation", "recommended_action", and every string in "red_flags" entirely in ${langName}. Keep JSON keys in English only.`;
+
+  const modelName = resolveModelName();
+  const ai = new GoogleGenAI({ apiKey });
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: [
+      {
+        text: `${langInstruction}\n\nSuspicious link to review: ${url}\n\nReturn ONLY the JSON object.`,
+      },
+    ],
+    config: {
+      systemInstruction: LINK_ANALYSIS_PROMPT,
+      temperature: 0.15,
+      maxOutputTokens: 1200,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const text = response.text ?? "";
+  const cleaned = stripJsonFences(text);
+  if (!cleaned) {
+    throw new Error("We could not finish checking this link. Please try again.");
+  }
+
+  let parsed: AnalysisResult & {
+    confidence?: number;
+    extracted_data?: unknown;
+    tamper_coordinates?: unknown;
+  };
+  try {
+    parsed = JSON.parse(cleaned) as AnalysisResult & {
+      confidence?: number;
+      extracted_data?: unknown;
+      tamper_coordinates?: unknown;
+    };
+  } catch {
+    throw new Error("We could not read the safety result. Please try again.");
+  }
+
+  if (typeof parsed.confidence !== "number") parsed.confidence = 50;
+  parsed.confidence = Math.max(0, Math.min(100, parsed.confidence));
+
+  const cleanedExtracted = sanitizeExtractedData(parsed.extracted_data);
+
+  return {
+    document_type: "other",
+    risk_score: typeof parsed.risk_score === "number" ? Math.max(0, Math.min(100, parsed.risk_score)) : 30,
+    confidence: parsed.confidence,
+    risk_level: parsed.risk_level ?? "medium",
+    summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags : [],
+    explanation: typeof parsed.explanation === "string" ? parsed.explanation : "",
+    recommended_action: typeof parsed.recommended_action === "string" ? parsed.recommended_action : "",
+    extracted_data: Object.keys(cleanedExtracted).length ? cleanedExtracted : undefined,
+    tamper_coordinates: undefined,
+  };
+}

@@ -13,6 +13,7 @@ interface TrendingScamsPayload {
 
 const CACHE_KEY = 'docrisk-official-scams-v1'
 const CACHE_TTL_MS = 10 * 60 * 1000
+const AUTO_REFRESH_MS = 30 * 60 * 1000
 
 interface CachedPayload {
   scams: ScamEntry[]
@@ -135,6 +136,8 @@ export function useOfficialScams() {
 
   useEffect(() => {
     void load()
+    const interval = setInterval(() => void load(true), AUTO_REFRESH_MS)
+    return () => clearInterval(interval)
   }, [load])
 
   const reload = useCallback(() => {

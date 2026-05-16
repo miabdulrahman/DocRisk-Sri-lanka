@@ -7,19 +7,38 @@ import { GoogleGenAI } from "@google/genai";
 import { registerAdminRoutes } from "./routes/admin.js";
 import analyzeRouter from "./routes/analyze.js";
 import trendingScamsRouter from "./routes/trendingScams.js";
+import guardianRoutes from "./routes/guardian.js";
 import { initFirebaseAdmin, isFirebaseAuthRequired } from "./firebaseAdmin.js";
 
-const AUDIO_MIME_TYPES = new Set(["audio/mpeg", "audio/wav", "audio/mp3", "audio/x-wav", "audio/wave"]);
 const AUDIO_MAX_BYTES = 10 * 1024 * 1024;
+
+function isAcceptedAudioMime(mime: string): boolean {
+  const base = mime.split(";")[0].trim().toLowerCase();
+  return (
+    base === "audio/mpeg" ||
+    base === "audio/mp3" ||
+    base === "audio/wav" ||
+    base === "audio/x-wav" ||
+    base === "audio/wave" ||
+    base === "audio/webm" ||
+    base === "audio/ogg"
+  );
+}
+
+function normalizeAudioMime(mime: string): string {
+  const base = mime.split(";")[0].trim().toLowerCase();
+  if (base === "audio/mp3") return "audio/mpeg";
+  return base;
+}
 
 const audioUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: AUDIO_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (AUDIO_MIME_TYPES.has(file.mimetype)) {
+    if (isAcceptedAudioMime(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid audio type. Upload MP3 or WAV files only."));
+      cb(new Error("Invalid audio type. Upload an MP3, WAV, or WebM audio file."));
     }
   },
 });
@@ -37,7 +56,7 @@ if (!process.env.GEMINI_API_KEY) {
 initFirebaseAdmin();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
 function createApiLimiter() {
   const enabled =
@@ -58,6 +77,8 @@ function createApiLimiter() {
 }
 
 const apiLimiter = createApiLimiter();
+
+app.use("/api", guardianRoutes);
 
 function buildExpertTranscript(
   history: Array<{ role?: string; parts?: Array<{ text?: string }> }>,
@@ -158,14 +179,14 @@ app.post(
         return res.status(400).json({ success: false, error: "No audio file uploaded under field 'audio'." });
       }
 
-      if (!AUDIO_MIME_TYPES.has(req.file.mimetype)) {
+      if (!isAcceptedAudioMime(req.file.mimetype)) {
         return res.status(400).json({
           success: false,
-          error: "Invalid audio type. Upload MP3 or WAV files only.",
+          error: "Invalid audio type. Upload an MP3, WAV, or WebM audio file.",
         });
       }
 
-      const normalizedMime = req.file.mimetype === "audio/mp3" ? "audio/mpeg" : req.file.mimetype;
+      const normalizedMime = normalizeAudioMime(req.file.mimetype);
       const audioBase64 = req.file.buffer.toString("base64");
       const ai = new GoogleGenAI({ apiKey });
 

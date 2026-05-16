@@ -22,7 +22,7 @@ export function ScamCard({ scam, onReadMore, index = 0 }: Props) {
       <div className="scam-card__top">
         <div className="scam-card__meta">
           <span className="scam-category-badge">{scam.category}</span>
-          <span className="scam-source-badge">{scam.source}</span>
+          <span className="scam-source-badge" data-source={scam.source}>{scam.source}</span>
           <span className={severityClass}>{scam.severity}</span>
         </div>
         <AlertTriangle

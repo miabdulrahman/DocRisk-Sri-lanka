@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
@@ -14,24 +14,22 @@ import {
   AudioWaveform,
   BarChart3,
   Calendar,
-  Check,
-  ClipboardCopy,
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   FileAudio,
   FileText,
   Filter,
   History,
-  IdCard,
   Layers,
   LogOut,
   Mail,
   Menu,
   Mic,
+  MicOff,
   Moon,
   RotateCcw,
+  Square,
   ScanSearch,
   Search,
   Settings,
@@ -41,11 +39,17 @@ import {
   Sun,
   TrendingUp,
   Upload,
+  Users,
   X,
 } from 'lucide-react'
 import { auth, isFirebaseConfigured } from './lib/firebase'
-import { ResultConfidence, ResultMetaBadges } from './components/ResultCard'
+import { ResultDashboard } from './components/DocumentAnalysisResult'
 import AdminDashboard from './pages/AdminDashboard'
+import GuardianActivityPage from './pages/GuardianActivityPage'
+import GuardianCheckDetail from './pages/GuardianCheckDetail'
+import GuardianDashboard from './pages/GuardianDashboard'
+import GuardianHistory from './pages/GuardianHistory'
+import MemberCheckPage from './pages/MemberCheckPage'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
 import { getApiBase } from './lib/apiBase'
@@ -55,7 +59,8 @@ import type { ScamEntry } from './utils/scamData'
 import { useOfficialScams } from './hooks/useOfficialScams'
 import { useUserAnalyses } from './hooks/useUserAnalyses'
 import { summarizeAnalyses } from './lib/userAnalyses'
-import type { AnalysisResult, ExtractedData, OutputLang, RiskLevel, TamperBox } from './types'
+import { timeAgo } from './lib/timeAgo'
+import type { OutputLang, RiskLevel } from './types'
 import './App.css'
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -75,21 +80,6 @@ function applyTheme(theme: Theme) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function parseFlag(flag: string): { lead: string; detail: string | null } {
-  const match = flag.match(/^(.+?)\s*\((.+)\)\s*$/)
-  if (match) return { lead: match[1], detail: match[2] }
-  return { lead: flag, detail: null }
-}
-
-function getRiskColor(level: RiskLevel): string {
-  switch (level) {
-    case 'low': return 'var(--risk-low)'
-    case 'medium': return 'var(--risk-medium)'
-    case 'high': return 'var(--risk-high)'
-    default: return 'var(--text-muted)'
-  }
-}
-
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 function mapAuthError(code: string): string {
   switch (code) {
@@ -160,16 +150,25 @@ export default function App() {
     )
   }
 
-  if (!user) return <AuthForm theme={theme} onToggleTheme={toggleTheme} />
-
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/admin" element={<AdminDashboard user={user} />} />
-        <Route
-          path="/*"
-          element={<MainLayout user={user} theme={theme} onToggleTheme={toggleTheme} />}
-        />
+        <Route path="/check" element={<MemberCheckPage />} />
+        {user ? (
+          <>
+            <Route path="/admin" element={<AdminDashboard user={user} />} />
+            <Route path="/guardian/history" element={<GuardianHistory user={user} />} />
+            <Route path="/guardian/activity" element={<GuardianActivityPage user={user} />} />
+            <Route path="/guardian/check/:requestId" element={<GuardianCheckDetail user={user} />} />
+            <Route path="/guardian" element={<GuardianDashboard user={user} />} />
+            <Route
+              path="/*"
+              element={<MainLayout user={user} theme={theme} onToggleTheme={toggleTheme} />}
+            />
+          </>
+        ) : (
+          <Route path="*" element={<AuthForm theme={theme} onToggleTheme={toggleTheme} />} />
+        )}
       </Routes>
     </BrowserRouter>
   )
@@ -452,6 +451,12 @@ function TopNav({
             {tab.label}
           </button>
         ))}
+        <NavLink
+          to="/guardian"
+          className={({ isActive }) => `nav-tab${isActive ? ' nav-tab--active' : ''}`}
+        >
+          My Circle
+        </NavLink>
       </div>
 
       <div className="nav-right">
@@ -587,6 +592,13 @@ function MobileMenu({
               </button>
             )
           })}
+          <Link to="/guardian" className="mobile-menu-item" onClick={onClose}>
+            <span className="mobile-menu-item__icon">
+              <Users size={18} />
+            </span>
+            <span className="mobile-menu-item__label">My Circle</span>
+            <ChevronRight size={16} className="mobile-menu-item__chevron" />
+          </Link>
         </nav>
         <div className="mobile-menu__footer">
           <button className="mobile-menu-item mobile-menu-item--danger" onClick={onLogout}>
@@ -609,7 +621,7 @@ function AnalyzeTab({ user }: { user: User }) {
   const [analysis, setAnalysis] = useState<AnalysisCompletePayload | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedScam, setSelectedScam] = useState<ScamEntry | null>(null)
-  const { scams, loading: scamsLoading, error: scamsError, sources, reload: reloadScams } = useOfficialScams()
+  const { scams, loading: scamsLoading, error: scamsError, sources, fetchedAt, reload: reloadScams } = useOfficialScams()
 
   const clearAnalysis = () => {
     setAnalysis(null)
@@ -651,44 +663,66 @@ function AnalyzeTab({ user }: { user: User }) {
               <div className="scam-alert-header__icon">
                 <AlertTriangle size={15} />
               </div>
-              <div>
-                <h2 className="scam-alert-header__title">Official Scam Advisories — Sri Lanka</h2>
-                <p className="scam-alert-header__sub">
-                  Live from{' '}
-                  {sources.length > 0 ? sources.join(' & ') : 'SLCERT & Sri Lanka Police'}
-                  {' '}— click a card to learn more or chat with an AI expert
-                </p>
+              <div className="scam-alert-header__body">
+                <div className="scam-alert-header__title-row">
+                  <h2 className="scam-alert-header__title">Official Scam Advisories — Sri Lanka</h2>
+                  <span className="scam-live-badge" aria-label="Live data">
+                    <span className="scam-live-dot" aria-hidden />
+                    LIVE
+                  </span>
+                </div>
+                <div className="scam-alert-header__meta-row">
+                  <p className="scam-alert-header__sub">
+                    {sources.length > 0 ? sources.join(' · ') : 'SLCERT · Sri Lanka Police · Google News'}
+                    {' '}— click a card to learn more or chat with an AI expert
+                  </p>
+                  {fetchedAt && !scamsLoading && (
+                    <span className="scam-alert-header__fetched">
+                      {timeAgo(fetchedAt)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="scam-alert-refresh"
+                    onClick={() => void reloadScams()}
+                    disabled={scamsLoading}
+                    aria-label="Refresh advisories"
+                    title="Refresh"
+                  >
+                    <RotateCcw size={12} className={scamsLoading ? 'scam-alert-refresh--spinning' : ''} />
+                  </button>
+                </div>
               </div>
             </div>
 
             {scamsLoading && (
-              <p className="scam-alert-status" role="status">Loading official advisories…</p>
+              <p className="scam-alert-status" role="status">Fetching live advisories…</p>
             )}
 
             {!scamsLoading && scamsError && (
               <div className="scam-alert-status scam-alert-status--error" role="alert">
                 <p>{scamsError}</p>
-                <button type="button" className="scam-alert-retry" onClick={() => void reloadScams(true)}>
+                <button type="button" className="scam-alert-retry" onClick={() => void reloadScams()}>
                   Retry
                 </button>
               </div>
             )}
 
             {!scamsLoading && !scamsError && scams.length === 0 && (
-              <p className="scam-alert-status">No official advisories available right now.</p>
+              <p className="scam-alert-status">No advisories available right now.</p>
             )}
 
             {!scamsLoading && scams.length > 0 && (
-            <div className="scam-alert-grid">
-              {scams.map((scam, i) => (
-                <ScamCard
-                  key={scam.id}
-                  scam={scam}
-                  onReadMore={setSelectedScam}
-                  index={i}
-                />
-              ))}
-            </div>
+              <div className="scam-alert-grid">
+                {scams.map((scam, i) => (
+                  <ScamCard
+                    key={scam.id}
+                    scam={scam}
+                    onReadMore={setSelectedScam}
+                    index={i}
+                  />
+                ))}
+              </div>
             )}
           </section>
         )}
@@ -728,515 +762,6 @@ function SkeletonLoader() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Half-Circle Gauge
-// ══════════════════════════════════════════════════════════════════════════════
-function HalfCircleGauge({ score, level }: { score: number; level: RiskLevel }) {
-  const R = 80
-  const CX = 100
-  const CY = 100
-  const clamped = Math.min(100, Math.max(0, score))
-
-  // angle: 0 score → π (left), 100 score → 0 (right)
-  const angle = Math.PI * (1 - clamped / 100)
-  const ex = CX + R * Math.cos(angle)
-  const ey = CY - R * Math.sin(angle)
-  const largeArc = clamped > 50 ? 1 : 0
-
-  const fillPath =
-    clamped === 0
-      ? ''
-      : `M ${CX - R} ${CY} A ${R} ${R} 0 ${largeArc} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`
-
-  const riskColor =
-    level === 'low' ? '#86efac' : level === 'medium' ? '#fbbf24' : '#ef4444'
-
-  // Pointer rotates from -180° (score=0) to 0° (score=100)
-  const pointerDeg = -180 + clamped * 1.8
-
-  return (
-    <div className="gauge-wrap">
-      <svg
-        viewBox="0 0 200 110"
-        className="gauge-svg"
-        aria-label={`Risk score ${score} out of 100`}
-      >
-        <defs>
-          <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#86efac" />
-            <stop offset="50%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#ef4444" />
-          </linearGradient>
-          <filter id="gauge-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Track */}
-        <path
-          d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`}
-          fill="none"
-          stroke="url(#gauge-grad)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          opacity="0.2"
-        />
-
-        {/* Fill arc */}
-        {fillPath && (
-          <path
-            d={fillPath}
-            fill="none"
-            stroke={riskColor}
-            strokeWidth="10"
-            strokeLinecap="round"
-            filter="url(#gauge-glow)"
-          />
-        )}
-
-        {/* Pointer arrow */}
-        <g style={{ transformOrigin: `${CX}px ${CY}px`, transform: `rotate(${pointerDeg}deg)` }}>
-          <polygon
-            points={`${CX + R - 16},${CY} ${CX + R + 2},${CY - 5} ${CX + R + 2},${CY + 5}`}
-            fill={riskColor}
-          />
-        </g>
-
-        {/* Score text */}
-        <text
-          x={CX}
-          y={CY - 6}
-          textAnchor="middle"
-          fill={riskColor}
-          fontSize="28"
-          fontWeight="800"
-          fontFamily="Plus Jakarta Sans, Inter, sans-serif"
-        >
-          {(score / 10).toFixed(1)}
-        </text>
-        <text
-          x={CX}
-          y={CY + 14}
-          textAnchor="middle"
-          fill="var(--text-muted)"
-          fontSize="11"
-          fontWeight="500"
-          fontFamily="Plus Jakarta Sans, Inter, sans-serif"
-        >
-          / 10
-        </text>
-      </svg>
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Tamper-bbox overlay
-// ══════════════════════════════════════════════════════════════════════════════
-function tamperBoxToStyle(box: TamperBox['box_2d']): React.CSSProperties {
-  // box is [ymin, xmin, ymax, xmax] on a 0..1000 normalized scale.
-  const [ymin, xmin, ymax, xmax] = box
-  const top = (ymin / 1000) * 100
-  const left = (xmin / 1000) * 100
-  const height = ((ymax - ymin) / 1000) * 100
-  const width = ((xmax - xmin) / 1000) * 100
-  return {
-    top: `${top}%`,
-    left: `${left}%`,
-    width: `${width}%`,
-    height: `${height}%`,
-  }
-}
-
-function DocPreviewWithTamper({
-  file,
-  previewUrl,
-  tamperBoxes,
-}: {
-  file: File
-  previewUrl: string | null
-  tamperBoxes?: TamperBox[]
-}) {
-  const isImage = file.type.startsWith('image/') && previewUrl
-  const boxes = tamperBoxes ?? []
-
-  if (!isImage) {
-    return (
-      <div className="doc-preview">
-        <FileText size={40} strokeWidth={1.25} />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`doc-preview doc-preview--with-overlay${boxes.length ? ' doc-preview--has-tamper' : ''}`}>
-      <img src={previewUrl ?? undefined} alt="Document preview" />
-      {boxes.length > 0 && (
-        <div className="tamper-overlay" aria-hidden={false} aria-label="Detected tampered regions">
-          {boxes.map((box, i) => (
-            <div
-              key={`${box.field_name}-${i}`}
-              className="tamper-box"
-              style={{ ...tamperBoxToStyle(box.box_2d), animationDelay: `${i * 120}ms` }}
-              tabIndex={0}
-              role="button"
-              aria-label={`${box.field_name}: ${box.reason}`}
-            >
-              <span className="tamper-box__label">{box.field_name}</span>
-              <span className="tamper-box__tooltip" role="tooltip">
-                <strong>{box.field_name}</strong>
-                <span>{box.reason}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Extracted Data Card (Auto-Fill)
-// ══════════════════════════════════════════════════════════════════════════════
-const EXTRACTED_FIELD_LABELS: Record<string, string> = {
-  full_name: 'Full Name',
-  document_id: 'Document / NIC Number',
-  date_of_birth: 'Date of Birth',
-  nic_kind: 'NIC Format',
-  nic_birth_year: 'Decoded Birth Year',
-  nic_gender: 'Decoded Gender',
-}
-
-const EXTRACTED_FIELD_ORDER = [
-  'full_name',
-  'document_id',
-  'date_of_birth',
-  'nic_kind',
-  'nic_birth_year',
-  'nic_gender',
-]
-
-function humanizeKey(key: string): string {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function CopyableField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false)
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Best-effort fallback for older browsers.
-      const tmp = document.createElement('textarea')
-      tmp.value = value
-      tmp.style.position = 'fixed'
-      tmp.style.left = '-9999px'
-      document.body.appendChild(tmp)
-      tmp.select()
-      try {
-        document.execCommand('copy')
-        setCopied(true)
-        window.setTimeout(() => setCopied(false), 1400)
-      } catch {
-        /* ignore */
-      } finally {
-        document.body.removeChild(tmp)
-      }
-    }
-  }
-
-  return (
-    <div className="extracted-field">
-      <label className="extracted-field__label">{label}</label>
-      <div className="extracted-field__row">
-        <input
-          className="extracted-field__input"
-          type="text"
-          readOnly
-          value={value}
-          onFocus={(e) => e.currentTarget.select()}
-          aria-label={label}
-        />
-        <button
-          type="button"
-          className={`extracted-field__copy${copied ? ' extracted-field__copy--ok' : ''}`}
-          onClick={onCopy}
-          aria-label={`Copy ${label}`}
-          title={`Copy ${label}`}
-        >
-          {copied ? <Check size={14} /> : <ClipboardCopy size={14} />}
-          <span className="extracted-field__copy-text">{copied ? 'Copied' : 'Copy'}</span>
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ExtractedDataCard({ data }: { data: ExtractedData }) {
-  const entries = Object.entries(data).filter(
-    ([, v]) => typeof v === 'string' && v.trim().length > 0,
-  ) as [string, string][]
-
-  if (entries.length === 0) return null
-
-  // Stable, human-friendly ordering with known labels first.
-  const ordered = [
-    ...EXTRACTED_FIELD_ORDER.filter((k) => entries.some(([ek]) => ek === k)).map(
-      (k) => entries.find(([ek]) => ek === k) as [string, string],
-    ),
-    ...entries.filter(([k]) => !EXTRACTED_FIELD_ORDER.includes(k)),
-  ]
-
-  return (
-    <section className="result-card extracted-card" style={{ '--delay': '140ms' } as React.CSSProperties}>
-      <div className="extracted-card__head">
-        <span className="extracted-card__icon">
-          <IdCard size={17} />
-        </span>
-        <div>
-          <h3 className="extracted-card__title">Extracted Document Information</h3>
-          <p className="extracted-card__sub">
-            Auto-filled by Gemini OCR. Verify each field against the original before reuse.
-          </p>
-        </div>
-      </div>
-      <div className="extracted-card__grid">
-        {ordered.map(([key, value]) => (
-          <CopyableField
-            key={key}
-            label={EXTRACTED_FIELD_LABELS[key] ?? humanizeKey(key)}
-            value={value}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Result Dashboard
-// ══════════════════════════════════════════════════════════════════════════════
-function ResultDashboard({
-  result,
-  file,
-  previewUrl,
-  outputLang,
-  onReset,
-}: {
-  result: AnalysisResult
-  file: File
-  previewUrl: string | null
-  outputLang: OutputLang
-  onReset: () => void
-}) {
-  const [explanationOpen, setExplanationOpen] = useState(false)
-  const riskColor = getRiskColor(result.risk_level)
-  const isMediumPlus = result.risk_level !== 'low'
-  const isHigh = result.risk_level === 'high'
-
-  const pillClass =
-    result.risk_level === 'low'
-      ? 'risk-pill risk-pill--low'
-      : result.risk_level === 'medium'
-        ? 'risk-pill risk-pill--medium'
-        : 'risk-pill risk-pill--high'
-
-  return (
-    <div className="result-dashboard">
-      {/* ── Left column ── */}
-      <div className="result-col result-col--left">
-        {/* Doc Card */}
-        <div className="result-card doc-card" style={{ '--delay': '0ms' } as React.CSSProperties}>
-          <div className="doc-card-header">
-            <div>
-              <h2 className="doc-card-title">Document Risk Analysis</h2>
-              <p className="doc-card-filename">{file.name}</p>
-              <p className="doc-card-risk" style={{ color: riskColor }}>
-                {result.risk_level} risk
-              </p>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={onReset}>
-              <RotateCcw size={14} />
-              Analyze
-            </button>
-          </div>
-
-          {/* Gauge + Preview (with tamper overlay when boxes exist) */}
-          <div className="gauge-preview-row">
-            <HalfCircleGauge score={result.risk_score} level={result.risk_level} />
-            <DocPreviewWithTamper
-              file={file}
-              previewUrl={previewUrl}
-              tamperBoxes={result.tamper_coordinates}
-            />
-          </div>
-
-          {result.tamper_coordinates && result.tamper_coordinates.length > 0 && (
-            <p className="tamper-summary" role="note">
-              <AlertTriangle size={14} />
-              {result.tamper_coordinates.length} suspected tampered{' '}
-              {result.tamper_coordinates.length === 1 ? 'region' : 'regions'} highlighted on the
-              preview — hover a box for the forensic reason.
-            </p>
-          )}
-
-          {/* Risk Summary Grid */}
-          <div className="risk-summary-grid">
-            <div className="risk-cell risk-cell--badges">
-              <span className="risk-cell__label">Document Type</span>
-              <ResultMetaBadges
-                documentType={result.document_type}
-                outputLang={outputLang}
-              />
-            </div>
-            <div className="risk-cell">
-              <span className="risk-cell__label">Risk Level</span>
-              <span className={pillClass}>{result.risk_level}</span>
-            </div>
-            <div className="risk-cell">
-              <span className="risk-cell__label">Risk Score</span>
-              <span
-                className="risk-cell__value risk-cell__value--score"
-                style={{ color: riskColor }}
-              >
-                {(result.risk_score / 10).toFixed(1)}{' '}
-                <span className="risk-cell__unit">/ 10</span>
-              </span>
-            </div>
-            <div className="risk-cell">
-              <span className="risk-cell__label">Summary</span>
-              <span className="risk-cell__value risk-cell__value--clamp">{result.summary}</span>
-            </div>
-          </div>
-
-          <ResultConfidence result={result} />
-
-          {/* Red Flags */}
-          {result.red_flags.length > 0 && (
-            <div className="red-flags">
-              <h3 className="section-label">Key Red Flags</h3>
-              <ul className="flag-list">
-                {result.red_flags.map((flag, i) => {
-                  const { lead, detail } = parseFlag(flag)
-                  return (
-                    <li
-                      key={`flag-${i}`}
-                      className="flag-item"
-                      style={{
-                        borderLeftColor: riskColor,
-                        animationDelay: `${i * 70}ms`,
-                      }}
-                    >
-                      <AlertTriangle size={15} style={{ color: riskColor }} />
-                      <span>
-                        <strong>{lead}</strong>
-                        {detail && <span className="flag-detail"> ({detail})</span>}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* Explanation Accordion */}
-        <div
-          className="result-card"
-          style={{ '--delay': '80ms' } as React.CSSProperties}
-        >
-          <button
-            className="explanation-toggle"
-            onClick={() => setExplanationOpen((o) => !o)}
-            aria-expanded={explanationOpen}
-          >
-            <span>Detailed Explanation</span>
-            {explanationOpen ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
-          </button>
-          {explanationOpen && (
-            <div className="explanation-body">{result.explanation}</div>
-          )}
-        </div>
-
-        <button className="btn btn-ghost" onClick={onReset}>
-          <RotateCcw size={15} />
-          Analyze another document
-        </button>
-      </div>
-
-      {/* ── Right column ── */}
-      <div className="result-col result-col--right">
-        {/* Findings Card */}
-        <div
-          className="result-card findings-card"
-          style={{ '--delay': '50ms' } as React.CSSProperties}
-        >
-          <div className="findings-header">
-            <div className="findings-icon-tile">
-              <ScanSearch size={17} />
-            </div>
-            <div>
-              <h3 className="findings-title">Analysis Findings</h3>
-              <p className="findings-sub">Explanation &amp; action</p>
-            </div>
-          </div>
-          {result.red_flags.length > 0 ? (
-            <ul className="findings-list">
-              {result.red_flags.map((flag, i) => {
-                const { lead } = parseFlag(flag)
-                return (
-                  <li key={`finding-${i}`} className="findings-item">
-                    <span className="findings-bullet" style={{ background: riskColor }} />
-                    <span>
-                      <strong>{lead}</strong>
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <p className="findings-empty">No significant anomalies detected.</p>
-          )}
-        </div>
-
-        {/* Action Card */}
-        <div
-          className={`result-card action-card${isMediumPlus ? ' action-card--danger' : ' action-card--safe'}`}
-          style={{ '--delay': '110ms' } as React.CSSProperties}
-        >
-          <div className="action-header">
-            {isMediumPlus ? (
-              <AlertTriangle size={19} />
-            ) : (
-              <ShieldCheck size={19} />
-            )}
-            <h3 className="action-title">Recommended Action</h3>
-          </div>
-          <p className="action-body">{result.recommended_action}</p>
-          <button
-            className={`btn action-cta${isHigh ? ' btn-danger' : isMediumPlus ? ' btn-warning' : ' btn-safe'}`}
-          >
-            {isMediumPlus ? 'Flag for Manual Review' : 'Approve Document'}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Auto-filled extracted data spans both columns ── */}
-      {result.extracted_data && Object.keys(result.extracted_data).length > 0 && (
-        <div className="result-extracted-row">
-          <ExtractedDataCard data={result.extracted_data} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // Audio Verification Tab
 // ══════════════════════════════════════════════════════════════════════════════
 type AudioVerdict = 'Authentic' | 'Suspicious' | 'Altered'
@@ -1255,12 +780,17 @@ const ACCEPTED_AUDIO_MIMES = new Set([
   'audio/wav',
   'audio/x-wav',
   'audio/wave',
+  'audio/webm',
+  'audio/webm;codecs=opus',
+  'audio/ogg',
+  'audio/ogg;codecs=opus',
 ])
 
 function isAcceptedAudio(file: File): boolean {
   if (ACCEPTED_AUDIO_MIMES.has(file.type)) return true
+  if (file.type.startsWith('audio/webm') || file.type.startsWith('audio/ogg')) return true
   const name = file.name.toLowerCase()
-  return name.endsWith('.mp3') || name.endsWith('.wav')
+  return name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.webm') || name.endsWith('.ogg')
 }
 
 function formatBytes(bytes: number): string {
@@ -1281,6 +811,7 @@ function verdictTone(v: AudioVerdict): { color: string; bg: string; ring: string
 }
 
 function AudioTab() {
+  const [inputMode, setInputMode] = useState<'upload' | 'record'>('record')
   const [file, setFile] = useState<File | null>(null)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -1289,11 +820,32 @@ function AudioTab() {
   const [result, setResult] = useState<AudioAnalysis | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordingChunksRef = useRef<Blob[]>([])
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
+
   useEffect(() => {
     return () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl)
+      cleanupRecording()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioUrl])
+
+  const cleanupRecording = () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop())
+      micStreamRef.current = null
+    }
+    mediaRecorderRef.current = null
+    recordingChunksRef.current = []
+    timerRef.current = null
+  }
 
   const reset = () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl)
@@ -1302,6 +854,9 @@ function AudioTab() {
     setResult(null)
     setError(null)
     setLoading(false)
+    setIsRecording(false)
+    setRecordingSeconds(0)
+    cleanupRecording()
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -1320,6 +875,69 @@ function AudioTab() {
     setResult(null)
     setFile(next)
     setAudioUrl(URL.createObjectURL(next))
+  }
+
+  const startRecording = async () => {
+    setError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStreamRef.current = stream
+      recordingChunksRef.current = []
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : ''
+
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      mediaRecorderRef.current = mr
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunksRef.current.push(e.data)
+      }
+
+      mr.onstop = () => {
+        const blob = new Blob(recordingChunksRef.current, {
+          type: mimeType || 'audio/webm',
+        })
+        const ext = mimeType.includes('webm') ? 'webm' : 'wav'
+        const recorded = new File([blob], `recording-${Date.now()}.${ext}`, {
+          type: blob.type,
+        })
+        if (audioUrl) URL.revokeObjectURL(audioUrl)
+        setError(null)
+        setResult(null)
+        setFile(recorded)
+        setAudioUrl(URL.createObjectURL(recorded))
+        cleanupRecording()
+        setIsRecording(false)
+      }
+
+      mr.start(250)
+      setIsRecording(true)
+      setRecordingSeconds(0)
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => s + 1)
+      }, 1000)
+    } catch (err) {
+      setError(
+        err instanceof Error && err.name === 'NotAllowedError'
+          ? 'Microphone access denied. Please allow microphone permission and try again.'
+          : 'Could not access microphone. Please check your device settings.',
+      )
+    }
+  }
+
+  const stopRecording = () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    mediaRecorderRef.current?.stop()
+  }
+
+  const fmtSeconds = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${sec.toString().padStart(2, '0')}`
   }
 
   const onAnalyze = async () => {
@@ -1355,110 +973,236 @@ function AudioTab() {
         </span>
         <h2 className="audio-hero__title">Audio Verification</h2>
         <p className="audio-hero__sub">
-          Detect voice deepfakes, splicing, and replay attacks. Upload an MP3 or WAV clip — Gemini will
-          inspect background noise, synthetic speech artifacts, and unnatural cadence on local Sri Lankan
-          words and identification numbers.
+          Detect voice deepfakes, splicing, and replay attacks. Upload a file or record directly — Gemini
+          will inspect background noise, synthetic speech artifacts, and unnatural cadence on local Sri
+          Lankan words and identification numbers.
         </p>
       </header>
 
       {!result && !loading && (
-        <section
-          className={`audio-dropzone${dragActive ? ' audio-dropzone--active' : ''}${file ? ' audio-dropzone--filled' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragActive(true)
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragActive(false)
-            const dropped = e.dataTransfer.files?.[0]
-            if (dropped) acceptFile(dropped)
-          }}
-          onClick={() => {
-            if (!file) inputRef.current?.click()
-          }}
-          role="button"
-          tabIndex={0}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept="audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
-            className="audio-dropzone__input"
-            onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
-          />
-
-          {!file ? (
-            <div className="audio-dropzone__empty">
-              <div className="audio-dropzone__icon-stack" aria-hidden>
-                <span className="audio-dropzone__pulse" />
-                <span className="audio-dropzone__pulse audio-dropzone__pulse--delay" />
-                <span className="audio-dropzone__icon">
-                  <AudioWaveform size={36} strokeWidth={1.5} />
-                </span>
-              </div>
-              <p className="audio-dropzone__title">Drop your audio file here</p>
-              <p className="audio-dropzone__hint">MP3 or WAV · up to 10 MB</p>
-              <button type="button" className="btn btn-primary audio-dropzone__cta">
-                <Upload size={15} />
-                Choose audio file
+        <>
+          {/* Mode toggle */}
+          {!file && !isRecording && (
+            <div className="audio-mode-tabs">
+              <button
+                type="button"
+                className={`audio-mode-tab${inputMode === 'upload' ? ' audio-mode-tab--active' : ''}`}
+                onClick={() => { setInputMode('upload'); reset() }}
+              >
+                <Upload size={14} />
+                Upload file
+              </button>
+              <button
+                type="button"
+                className={`audio-mode-tab${inputMode === 'record' ? ' audio-mode-tab--active' : ''}`}
+                onClick={() => { setInputMode('record'); reset() }}
+              >
+                <Mic size={14} />
+                Record audio
               </button>
             </div>
-          ) : (
-            <div className="audio-dropzone__filled">
-              <div className="audio-file">
-                <span className="audio-file__icon">
-                  <FileAudio size={22} />
-                </span>
-                <div className="audio-file__meta">
-                  <p className="audio-file__name">{file.name}</p>
-                  <p className="audio-file__sub">
-                    {formatBytes(file.size)} · {file.type || 'audio'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="audio-file__clear"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    reset()
-                  }}
-                  aria-label="Remove file"
-                >
-                  <X size={15} />
-                </button>
-              </div>
+          )}
 
-              {audioUrl && (
-                <div className="audio-player">
-                  <div className="audio-player__waves" aria-hidden>
-                    {Array.from({ length: 32 }).map((_, i) => (
-                      <span key={i} style={{ animationDelay: `${i * 60}ms` }} />
-                    ))}
+          {/* Upload mode */}
+          {inputMode === 'upload' && (
+            <section
+              className={`audio-dropzone${dragActive ? ' audio-dropzone--active' : ''}${file ? ' audio-dropzone--filled' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragActive(true)
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragActive(false)
+                const dropped = e.dataTransfer.files?.[0]
+                if (dropped) acceptFile(dropped)
+              }}
+              onClick={() => {
+                if (!file) inputRef.current?.click()
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept="audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
+                className="audio-dropzone__input"
+                onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+              />
+
+              {!file ? (
+                <div className="audio-dropzone__empty">
+                  <div className="audio-dropzone__icon-stack" aria-hidden>
+                    <span className="audio-dropzone__pulse" />
+                    <span className="audio-dropzone__pulse audio-dropzone__pulse--delay" />
+                    <span className="audio-dropzone__icon">
+                      <AudioWaveform size={36} strokeWidth={1.5} />
+                    </span>
                   </div>
-                  <audio
-                    src={audioUrl}
-                    controls
-                    preload="metadata"
-                    className="audio-player__el"
-                  />
+                  <p className="audio-dropzone__title">Drop your audio file here</p>
+                  <p className="audio-dropzone__hint">MP3 or WAV · up to 10 MB</p>
+                  <button type="button" className="btn btn-primary audio-dropzone__cta">
+                    <Upload size={15} />
+                    Choose audio file
+                  </button>
+                </div>
+              ) : (
+                <div className="audio-dropzone__filled">
+                  <div className="audio-file">
+                    <span className="audio-file__icon">
+                      <FileAudio size={22} />
+                    </span>
+                    <div className="audio-file__meta">
+                      <p className="audio-file__name">{file.name}</p>
+                      <p className="audio-file__sub">
+                        {formatBytes(file.size)} · {file.type || 'audio'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="audio-file__clear"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        reset()
+                      }}
+                      aria-label="Remove file"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  {audioUrl && (
+                    <div className="audio-player">
+                      <div className="audio-player__waves" aria-hidden>
+                        {Array.from({ length: 32 }).map((_, i) => (
+                          <span key={i} style={{ animationDelay: `${i * 60}ms` }} />
+                        ))}
+                      </div>
+                      <audio
+                        src={audioUrl}
+                        controls
+                        preload="metadata"
+                        className="audio-player__el"
+                      />
+                    </div>
+                  )}
+
+                  <div className="audio-actions" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="btn btn-ghost" onClick={reset}>
+                      <RotateCcw size={14} />
+                      Replace
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={onAnalyze}>
+                      <Mic size={15} />
+                      Analyze audio
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <div className="audio-actions" onClick={(e) => e.stopPropagation()}>
-                <button type="button" className="btn btn-ghost" onClick={reset}>
-                  <RotateCcw size={14} />
-                  Replace
-                </button>
-                <button type="button" className="btn btn-primary" onClick={onAnalyze}>
-                  <Mic size={15} />
-                  Analyze audio
-                </button>
-              </div>
-            </div>
+            </section>
           )}
-        </section>
+
+          {/* Record mode */}
+          {inputMode === 'record' && !file && (
+            <section className={`audio-recorder${isRecording ? ' audio-recorder--active' : ''}`}>
+              {!isRecording ? (
+                <div className="audio-recorder__idle">
+                  <div className="audio-recorder__ring-wrap" aria-hidden>
+                    <span className="audio-recorder__ring" />
+                    <span className="audio-recorder__ring audio-recorder__ring--delay" />
+                    <span className="audio-recorder__mic-btn" onClick={startRecording}>
+                      <Mic size={38} strokeWidth={1.5} />
+                    </span>
+                  </div>
+                  <p className="audio-recorder__title">Tap to start recording</p>
+                  <p className="audio-recorder__hint">Your microphone will be used</p>
+                  <button type="button" className="btn btn-primary" onClick={startRecording}>
+                    <Mic size={15} />
+                    Start recording
+                  </button>
+                </div>
+              ) : (
+                <div className="audio-recorder__live">
+                  <div className="audio-recorder__live-bars" aria-hidden>
+                    {Array.from({ length: 20 }).map((_, i) => (
+                      <span key={i} style={{ animationDelay: `${i * 55}ms` }} />
+                    ))}
+                  </div>
+                  <div className="audio-recorder__live-center">
+                    <span className="audio-recorder__dot" aria-hidden />
+                    <span className="audio-recorder__timer">{fmtSeconds(recordingSeconds)}</span>
+                    <span className="audio-recorder__live-label">Recording…</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn audio-recorder__stop-btn"
+                    onClick={stopRecording}
+                    aria-label="Stop recording"
+                  >
+                    <Square size={14} fill="currentColor" />
+                    Stop &amp; review
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Recorded file ready — shared player + actions */}
+          {inputMode === 'record' && file && (
+            <section className="audio-dropzone audio-dropzone--filled">
+              <div className="audio-dropzone__filled">
+                <div className="audio-file">
+                  <span className="audio-file__icon">
+                    <Mic size={22} />
+                  </span>
+                  <div className="audio-file__meta">
+                    <p className="audio-file__name">Recorded clip</p>
+                    <p className="audio-file__sub">
+                      {formatBytes(file.size)} · {file.type || 'audio/webm'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="audio-file__clear"
+                    onClick={reset}
+                    aria-label="Discard recording"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                {audioUrl && (
+                  <div className="audio-player">
+                    <div className="audio-player__waves" aria-hidden>
+                      {Array.from({ length: 32 }).map((_, i) => (
+                        <span key={i} style={{ animationDelay: `${i * 60}ms` }} />
+                      ))}
+                    </div>
+                    <audio
+                      src={audioUrl}
+                      controls
+                      preload="metadata"
+                      className="audio-player__el"
+                    />
+                  </div>
+                )}
+
+                <div className="audio-actions">
+                  <button type="button" className="btn btn-ghost" onClick={reset}>
+                    <MicOff size={14} />
+                    Re-record
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={onAnalyze}>
+                    <Mic size={15} />
+                    Analyze audio
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {error && !loading && (
