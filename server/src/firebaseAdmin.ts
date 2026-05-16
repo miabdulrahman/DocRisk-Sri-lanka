@@ -1,6 +1,13 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import admin from "firebase-admin";
 
 let initialized = false;
+
+function resolveCredentialPath(relOrAbs: string): string {
+  if (path.isAbsolute(relOrAbs)) return path.normalize(relOrAbs);
+  return path.resolve(process.cwd(), relOrAbs);
+}
 
 export function initFirebaseAdmin(): boolean {
   if (initialized) return true;
@@ -10,10 +17,42 @@ export function initFirebaseAdmin(): boolean {
 
   try {
     if (!admin.apps.length) {
+      const credEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+
+      let credentialUsed = "application-default";
+      let credentialInstance: admin.credential.Credential;
+
+      if (credEnv) {
+        const credPath = resolveCredentialPath(credEnv);
+        if (existsSync(credPath)) {
+          try {
+            const parsed = JSON.parse(readFileSync(credPath, "utf8"));
+            credentialInstance = admin.credential.cert(parsed as admin.ServiceAccount);
+            credentialUsed = credPath;
+          } catch {
+            credentialInstance = admin.credential.applicationDefault();
+            console.warn(
+              `[firebase-admin] Could not read JSON at ${credPath}; falling back to application default.`,
+            );
+          }
+        } else {
+          credentialInstance = admin.credential.applicationDefault();
+          console.warn(
+            `[firebase-admin] GOOGLE_APPLICATION_CREDENTIALS="${credEnv}" not found at resolved path "${credPath}"; using application default.`,
+          );
+        }
+      } else {
+        credentialInstance = admin.credential.applicationDefault();
+      }
+
       admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
+        credential: credentialInstance,
         projectId,
       });
+
+      if (process.env.NODE_ENV !== "test") {
+        console.info(`[firebase-admin] Initialized (credential: ${credentialUsed})`);
+      }
     }
     initialized = true;
     return true;
@@ -24,7 +63,7 @@ export function initFirebaseAdmin(): boolean {
 }
 
 export async function verifyIdToken(
-  authHeader: string | undefined
+  authHeader: string | undefined,
 ): Promise<admin.auth.DecodedIdToken | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
   if (!initFirebaseAdmin()) return null;
@@ -32,7 +71,9 @@ export async function verifyIdToken(
   const token = authHeader.slice(7);
   try {
     return await admin.auth().verifyIdToken(token);
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[firebase-admin] verifyIdToken failed:", msg);
     return null;
   }
 }
@@ -46,15 +87,46 @@ export function getFirestoreDb(): admin.firestore.Firestore | null {
   return admin.firestore();
 }
 
+/** Collect possible UID arrays from admins document shapes. */
+function collectAdminUids(data: Record<string, unknown> | undefined): string[] {
+  if (!data) return [];
+
+  const fromArray = (v: unknown): string[] => {
+    if (!Array.isArray(v)) return [];
+    return v
+      .flatMap((item) =>
+        typeof item === "string" ? item.trim() : typeof item === "number" ? String(item).trim() : [],
+      )
+      .filter(Boolean);
+  };
+
+  const lists = [...fromArray(data.uids), ...fromArray(data.adminUids)];
+  if (typeof data.uid === "string" && data.uid.trim()) {
+    lists.push(data.uid.trim());
+  }
+
+  return [...new Set(lists)];
+}
+
 export async function isUserAdmin(uid: string): Promise<boolean> {
   const db = getFirestoreDb();
   if (!db) return false;
 
+  const normalized = uid.trim();
   try {
     const snap = await db.collection("config").doc("admins").get();
-    if (!snap.exists) return false;
-    const uids = snap.data()?.uids;
-    return Array.isArray(uids) && uids.includes(uid);
+    if (!snap.exists) {
+      console.warn("[firebase-admin] Firestore doc config/admins is missing.");
+      return false;
+    }
+    const candidates = collectAdminUids(snap.data() as Record<string, unknown>);
+    const ok = candidates.includes(normalized);
+    if (!ok) {
+      console.warn(
+        `[firebase-admin] User ${normalized.slice(0, 8)}… is not listed in config/admins (found ${candidates.length} UID(s)).`,
+      );
+    }
+    return ok;
   } catch (err) {
     console.warn("Admin check failed:", err);
     return false;

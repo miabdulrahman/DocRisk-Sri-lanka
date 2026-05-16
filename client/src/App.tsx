@@ -11,6 +11,7 @@ import {
 import {
   AlertTriangle,
   Bell,
+  Calendar,
   ClipboardList,
   ChevronDown,
   ChevronUp,
@@ -27,7 +28,7 @@ import {
   Sun,
   X,
 } from 'lucide-react'
-import { auth } from './lib/firebase'
+import { auth, isFirebaseConfigured } from './lib/firebase'
 import { ResultConfidence, ResultMetaBadges } from './components/ResultCard'
 import AdminDashboard from './pages/AdminDashboard'
 import { LanguageSelector } from './components/LanguageSelector'
@@ -35,6 +36,8 @@ import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
 import { ScamCard } from './components/ScamCard'
 import { ScamChatModal } from './components/ScamChatModal'
 import { SCAMS, type ScamEntry } from './utils/scamData'
+import { useUserAnalyses } from './hooks/useUserAnalyses'
+import { summarizeAnalyses } from './lib/userAnalyses'
 import type { AnalysisResult, OutputLang, RiskLevel } from './types'
 import './App.css'
 
@@ -324,8 +327,8 @@ function MainLayout({
         />
         <main className="page">
           {activeTab === 'analyze' && <AnalyzeTab user={user} />}
-          {activeTab === 'history' && <HistoryTab />}
-          {activeTab === 'reports' && <ReportsTab />}
+          {activeTab === 'history' && <HistoryTab user={user} />}
+          {activeTab === 'reports' && <ReportsTab user={user} />}
           {activeTab === 'settings' && (
             <SettingsTab theme={theme} onToggleTheme={onToggleTheme} />
           )}
@@ -904,36 +907,245 @@ function ResultDashboard({
 // ══════════════════════════════════════════════════════════════════════════════
 // History / Reports / Settings tabs
 // ══════════════════════════════════════════════════════════════════════════════
-function HistoryTab() {
-  return (
-    <div className="placeholder-tab">
-      <div className="placeholder-card">
-        <div className="placeholder-icon">
-          <History size={30} strokeWidth={1.25} />
+function formatDocTypeUi(type: string): string {
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function HistoryTab({ user }: { user: User }) {
+  const { items, error, loading } = useUserAnalyses(user.uid)
+
+  if (!isFirebaseConfigured) {
+    return (
+      <div className="placeholder-tab">
+        <div className="placeholder-card">
+          <div className="placeholder-icon">
+            <History size={30} strokeWidth={1.25} />
+          </div>
+          <h2>History needs Firebase</h2>
+          <p>
+            Configure <code>VITE_FIREBASE_*</code> in <code>client/.env</code> so analyses can be saved and
+            listed here.
+          </p>
         </div>
-        <h2>No analysis history yet</h2>
-        <p>
-          Your analyzed documents will appear here. Upload a document in the
-          Analyze tab to get started.
-        </p>
       </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="analyze-tab">
+        <div className="admin-loading">
+          <div className="spinner" />
+          <p>Loading your history…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="analyze-tab">
+        <div className="api-error" role="alert">{error}</div>
+      </div>
+    )
+  }
+
+  const rows = items ?? []
+
+  if (rows.length === 0) {
+    return (
+      <div className="placeholder-tab">
+        <div className="placeholder-card">
+          <div className="placeholder-icon">
+            <History size={30} strokeWidth={1.25} />
+          </div>
+          <h2>No analysis history yet</h2>
+          <p>
+            Upload a document under <strong>Analyze</strong>. Each result is saved to your Firestore profile when
+            the run completes successfully.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="analyze-tab history-tab">
+      <header className="history-header">
+        <h2 className="history-title">Recent analyses</h2>
+        <p className="history-sub">{rows.length} saved {rows.length === 1 ? 'result' : 'results'}</p>
+      </header>
+      <ul className="history-list">
+        {rows.map((row) => (
+          <li key={row.id} className="history-item preview-card">
+            <div className="history-item__top">
+              <div>
+                <p className="preview-name">{row.fileName}</p>
+                <p className="history-item__meta">
+                  <Calendar size={13} aria-hidden />
+                  {row.createdAt
+                    ? new Intl.DateTimeFormat(undefined, {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      }).format(row.createdAt)
+                    : 'Date unknown'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
+                <span className="doc-type-badge">{formatDocTypeUi(row.document_type)}</span>
+                <span
+                  className={
+                    row.risk_level === 'low'
+                      ? 'risk-pill risk-pill--low'
+                      : row.risk_level === 'medium'
+                        ? 'risk-pill risk-pill--medium'
+                        : 'risk-pill risk-pill--high'
+                  }
+                >
+                  {row.risk_level}
+                </span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Score {row.risk_score}
+                </span>
+              </div>
+            </div>
+            <p className="history-item__summary">{row.summary}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-function ReportsTab() {
-  return (
-    <div className="placeholder-tab">
-      <div className="placeholder-card">
-        <div className="placeholder-icon">
-          <ClipboardList size={30} strokeWidth={1.25} />
+function ReportsTab({ user }: { user: User }) {
+  const { items, error, loading } = useUserAnalyses(user.uid)
+  const entries = items ?? []
+  const report = summarizeAnalyses(entries)
+
+  if (!isFirebaseConfigured) {
+    return (
+      <div className="placeholder-tab">
+        <div className="placeholder-card">
+          <div className="placeholder-icon">
+            <ClipboardList size={30} strokeWidth={1.25} />
+          </div>
+          <h2>Reports need Firebase</h2>
+          <p>
+            Add your Firebase web config to <code>client/.env</code> — reports are computed from analyses stored
+            under your user ID.
+          </p>
         </div>
-        <h2>Reports coming soon</h2>
-        <p>
-          Aggregate risk reports and analytics for your organization will be
-          available here.
-        </p>
       </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="analyze-tab">
+        <div className="admin-loading">
+          <div className="spinner" />
+          <p>Building your report…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="analyze-tab">
+        <div className="api-error" role="alert">{error}</div>
+      </div>
+    )
+  }
+
+  if (report.total === 0) {
+    return (
+      <div className="placeholder-tab">
+        <div className="placeholder-card">
+          <div className="placeholder-icon">
+            <ClipboardList size={30} strokeWidth={1.25} />
+          </div>
+          <h2>No data for reports yet</h2>
+          <p>Analyze at least one document to see trends and summaries here.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const riskLevels: RiskLevel[] = ['low', 'medium', 'high']
+  const docEntries = Object.entries(report.byType).sort((a, b) => b[1] - a[1])
+
+  return (
+    <div className="analyze-tab reports-tab">
+      <header className="history-header">
+        <h2 className="history-title">Your reports</h2>
+        <p className="history-sub">Totals from analyses saved to your account ({report.total} total).</p>
+      </header>
+
+      <section className="admin-metrics" style={{ marginBottom: '1.25rem' }}>
+        <article className="admin-metric-card">
+          <p className="admin-metric-card__label">Total analyses</p>
+          <p className="admin-metric-card__value">{report.total}</p>
+        </article>
+        <article className="admin-metric-card">
+          <p className="admin-metric-card__label">Avg risk score</p>
+          <p className="admin-metric-card__value">{report.avgRisk}</p>
+          <p className="admin-metric-card__hint">0–100</p>
+        </article>
+        <article className="admin-metric-card">
+          <p className="admin-metric-card__label">Avg confidence</p>
+          <p className="admin-metric-card__value">{report.avgConfidence}</p>
+          <p className="admin-metric-card__hint">Model certainty</p>
+        </article>
+        <article className="admin-metric-card">
+          <p className="admin-metric-card__label">High-risk share</p>
+          <p className="admin-metric-card__value">{report.highPct}%</p>
+          <p className="admin-metric-card__hint">{report.riskCounts.high} flagged high</p>
+        </article>
+      </section>
+
+      <section className="admin-panel">
+        <h3 className="admin-panel__title">Risk distribution</h3>
+        <div className="admin-chart">
+          {riskLevels.map((level) => {
+            const count = report.riskCounts[level]
+            const pct = report.total > 0 ? (count / report.total) * 100 : 0
+            return (
+              <div key={level} className="admin-chart__row">
+                <span className="admin-chart__label">{level}</span>
+                <div className="admin-chart__track">
+                  <span
+                    className={`admin-chart__fill admin-chart__fill--${level}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="admin-chart__count">{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="admin-panel">
+        <h3 className="admin-panel__title">Document types</h3>
+        {docEntries.length === 0 ? (
+          <p className="admin-subtitle">No type breakdown.</p>
+        ) : (
+          <ul className="admin-doc-list">
+            {docEntries.map(([type, count]) => (
+              <li key={type} className="admin-doc-item">
+                <span className="admin-doc-item__name">{formatDocTypeUi(type)}</span>
+                <span className="admin-doc-item__count">{count}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <p className="history-footnote">
+        Figures update when you finish new analyses — data is stored in{' '}
+        <code style={{ fontSize: '0.82em' }}>users/&lt;uid&gt;/analyses</code>.
+      </p>
     </div>
   )
 }

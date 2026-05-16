@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { BarChart3, RefreshCw } from 'lucide-react'
-import { Navigate, Link } from 'react-router-dom'
-import { checkIsAdmin, fetchAdminStats } from '../lib/admin'
+import { Link } from 'react-router-dom'
+import { verifyAdminGate, fetchAdminStats } from '../lib/admin'
 import type { AdminStats, RiskLevel } from '../types'
-import './AdminDashboard.css'
 
 function formatDocType(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -24,6 +23,7 @@ type AdminDashboardProps = {
 export default function AdminDashboard({ user }: AdminDashboardProps) {
   const [adminChecked, setAdminChecked] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [deniedReason, setDeniedReason] = useState<string | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,11 +56,13 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     let cancelled = false
 
     async function verifyAdmin() {
-      const ok = await checkIsAdmin(user.uid)
+      const idToken = await user.getIdToken()
+      const gate = await verifyAdminGate(idToken)
       if (cancelled) return
-      setIsAdmin(ok)
+      setDeniedReason(gate.allowed ? null : gate.reason)
+      setIsAdmin(gate.allowed)
       setAdminChecked(true)
-      if (ok) await loadStats()
+      if (gate.allowed) await loadStats()
       else setLoading(false)
     }
 
@@ -80,7 +82,23 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
   }
 
   if (!isAdmin) {
-    return <Navigate to="/" replace />
+    return (
+      <div className="admin-page">
+        <h1 className="admin-title">Admin access</h1>
+        <div className="admin-error" role="alert">
+          {deniedReason ?? 'You do not have access to this page.'}
+        </div>
+        <p className="admin-subtitle" style={{ maxWidth: 520 }}>
+          The API checks Firebase Admin + Firestore document{' '}
+          <strong>config/admins</strong> with array field <strong>uids</strong> (your UID from Firebase
+          Authentication). Check the backend terminal for <code>[firebase-admin]</code> log lines after
+          a refresh if it still fails.
+        </p>
+        <Link to="/" className="btn btn-primary">
+          ← Back to app
+        </Link>
+      </div>
+    )
   }
 
   const total = stats?.totalAnalyses ?? 0
