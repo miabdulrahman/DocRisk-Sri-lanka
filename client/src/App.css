@@ -1,3 +1,5 @@
+@import './pages/AdminDashboard.css';
+
 /* ══════════════════════════════════════════════════════════════════════════════
    LAYOUT
 ══════════════════════════════════════════════════════════════════════════════ */
@@ -1704,6 +1706,76 @@
     transform: rotate(360deg) scale(1);
     opacity: 1;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HISTORY / PERSONAL REPORTS (main app tabs)
+══════════════════════════════════════════════════════════════════════════════ */
+.history-tab .history-header,
+.reports-tab .history-header {
+  margin-bottom: 1.25rem;
+}
+
+.history-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-h);
+  margin: 0 0 0.25rem;
+  letter-spacing: -0.02em;
+}
+
+.history-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.history-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.history-item__meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.history-item__summary {
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.history-footnote {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════

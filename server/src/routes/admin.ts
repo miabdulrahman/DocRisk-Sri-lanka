@@ -3,6 +3,36 @@ import { getFirestoreDb, isUserAdmin, verifyIdToken } from "../firebaseAdmin.js"
 
 type RiskLevel = "low" | "medium" | "high";
 
+/** Confirms JWT + Firebase Admin; does not expose the admin UID list to the browser. */
+async function adminCheckHandler(req: Request, res: Response) {
+  try {
+    const decoded = await verifyIdToken(req.headers.authorization);
+    if (!decoded) {
+      return res.status(401).json({
+        success: false,
+        isAdmin: false,
+        error: "Authentication required.",
+      });
+    }
+
+    if (!getFirestoreDb()) {
+      return res.status(503).json({
+        success: false,
+        isAdmin: false,
+        error: "Firestore is not configured on the server.",
+      });
+    }
+
+    const isAdmin = await isUserAdmin(decoded.uid);
+    return res.json({ success: true, isAdmin });
+  } catch (error: unknown) {
+    console.error("Admin check error:", error);
+    const message =
+      error instanceof Error ? error.message : "Admin check failed.";
+    return res.status(500).json({ success: false, isAdmin: false, error: message });
+  }
+}
+
 async function adminStatsHandler(req: Request, res: Response) {
   try {
     const decoded = await verifyIdToken(req.headers.authorization);
@@ -78,5 +108,6 @@ async function adminStatsHandler(req: Request, res: Response) {
 }
 
 export function registerAdminRoutes(app: Express) {
+  app.get("/api/admin/check", adminCheckHandler);
   app.get("/api/admin/stats", adminStatsHandler);
 }
