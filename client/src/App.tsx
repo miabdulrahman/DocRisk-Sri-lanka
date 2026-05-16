@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import {
@@ -9,23 +9,31 @@ import {
   type User,
 } from 'firebase/auth'
 import {
+  Activity,
   AlertTriangle,
-  Bell,
+  BarChart3,
   Calendar,
   ClipboardList,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   FileText,
+  Filter,
   History,
+  Layers,
   LogOut,
   Mail,
   Menu,
   Moon,
   RotateCcw,
   ScanSearch,
+  Search,
   Settings,
+  ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Sun,
+  TrendingUp,
   X,
 } from 'lucide-react'
 import { auth, isFirebaseConfigured } from './lib/firebase'
@@ -129,8 +137,16 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="app-loading">
-        <div className="spinner" />
+      <div className="app-loading" role="status" aria-busy="true">
+        <div className="app-loading__ambient" aria-hidden />
+        <div className="app-loading__rings" aria-hidden>
+          <span className="app-loading__orbit" />
+          <span className="app-loading__orbit app-loading__orbit--delayed" />
+        </div>
+        <div className="app-loading__pulse" aria-hidden />
+        <div className="app-loading__core">
+          <div className="spinner" aria-hidden />
+        </div>
       </div>
     )
   }
@@ -289,6 +305,8 @@ function MainLayout({
   const [activeTab, setActiveTab] = useState<Tab>('analyze')
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const profileWrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -296,18 +314,31 @@ function MainLayout({
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    if (!profileOpen) return
+    function handleDocMouse(e: MouseEvent) {
+      const el = profileWrapRef.current
+      if (el && !el.contains(e.target as Node)) setProfileOpen(false)
+    }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setProfileOpen(false)
+    }
+    document.addEventListener('mousedown', handleDocMouse)
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleDocMouse)
+      window.removeEventListener('keydown', handleEsc)
+    }
+  }, [profileOpen])
+
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
     setMobileOpen(false)
+    setProfileOpen(false)
   }
 
   return (
     <div className="app-root">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        onLogout={() => signOut(auth)}
-      />
       <div className="main-col">
         <TopNav
           activeTab={activeTab}
@@ -318,12 +349,24 @@ function MainLayout({
           user={user}
           mobileOpen={mobileOpen}
           onMobileToggle={() => setMobileOpen((o) => !o)}
+          profileWrapRef={profileWrapRef}
+          profileOpen={profileOpen}
+          onProfileToggle={() => {
+            setMobileOpen(false)
+            setProfileOpen((o) => !o)
+          }}
+          onProfileSettings={() => handleTabChange('settings')}
+          onProfileLogout={() => {
+            setProfileOpen(false)
+            void signOut(auth)
+          }}
         />
         <MobileMenu
           open={mobileOpen}
           activeTab={activeTab}
           onTabChange={handleTabChange}
           onLogout={() => signOut(auth)}
+          onClose={() => setMobileOpen(false)}
         />
         <main className="page">
           {activeTab === 'analyze' && <AnalyzeTab user={user} />}
@@ -339,67 +382,12 @@ function MainLayout({
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Sidebar
-// ══════════════════════════════════════════════════════════════════════════════
-const SIDEBAR_NAV: { id: Tab; icon: React.ReactNode; label: string }[] = [
-  { id: 'analyze', icon: <ScanSearch size={20} />, label: 'Analyze' },
-  { id: 'history', icon: <FileText size={20} />, label: 'History' },
-  { id: 'reports', icon: <ClipboardList size={20} />, label: 'Reports' },
-  { id: 'settings', icon: <Settings size={20} />, label: 'Settings' },
-]
-
-function Sidebar({
-  activeTab,
-  onTabChange,
-  onLogout,
-}: {
-  activeTab: Tab
-  onTabChange: (t: Tab) => void
-  onLogout: () => void
-}) {
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-top">
-        <div className="sidebar-logo">
-          <ShieldCheck size={20} strokeWidth={1.5} />
-        </div>
-        {SIDEBAR_NAV.map((item) => (
-          <button
-            key={item.id}
-            className={`sidebar-item${activeTab === item.id ? ' sidebar-item--active' : ''}`}
-            onClick={() => onTabChange(item.id)}
-            title={item.label}
-            aria-label={item.label}
-          >
-            {item.icon}
-          </button>
-        ))}
-      </div>
-      <div className="sidebar-bottom">
-        <button className="sidebar-item" title="Notifications" aria-label="Notifications">
-          <Bell size={20} />
-        </button>
-        <button
-          className="sidebar-item sidebar-item--danger"
-          onClick={onLogout}
-          title="Log out"
-          aria-label="Log out"
-        >
-          <LogOut size={20} />
-        </button>
-      </div>
-    </aside>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
 // Top Nav
 // ══════════════════════════════════════════════════════════════════════════════
-const NAV_TABS: { id: Tab; label: string }[] = [
+const MAIN_NAV_TABS: { id: Tab; label: string }[] = [
   { id: 'analyze', label: 'Analyze' },
   { id: 'history', label: 'History' },
   { id: 'reports', label: 'Reports' },
-  { id: 'settings', label: 'Settings' },
 ]
 
 function TopNav({
@@ -411,6 +399,11 @@ function TopNav({
   user,
   mobileOpen,
   onMobileToggle,
+  profileWrapRef,
+  profileOpen,
+  onProfileToggle,
+  onProfileSettings,
+  onProfileLogout,
 }: {
   activeTab: Tab
   onTabChange: (t: Tab) => void
@@ -420,7 +413,14 @@ function TopNav({
   user: User
   mobileOpen: boolean
   onMobileToggle: () => void
+  profileWrapRef: React.RefObject<HTMLDivElement | null>
+  profileOpen: boolean
+  onProfileToggle: () => void
+  onProfileSettings: () => void
+  onProfileLogout: () => void
 }) {
+  const displayEmail = user.email ?? 'Signed in'
+
   return (
     <nav className={`top-nav${scrolled ? ' scrolled' : ''}`}>
       <div className="nav-brand">
@@ -432,7 +432,7 @@ function TopNav({
       </div>
 
       <div className="nav-tabs">
-        {NAV_TABS.map((tab) => (
+        {MAIN_NAV_TABS.map((tab) => (
           <button
             key={tab.id}
             className={`nav-tab${activeTab === tab.id ? ' nav-tab--active' : ''}`}
@@ -447,11 +447,51 @@ function TopNav({
         <button className="theme-toggle" onClick={onToggleTheme} aria-label="Toggle theme">
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <div className="user-chip">
-          <div className="user-avatar">
-            {(user.email?.[0] ?? 'U').toUpperCase()}
-          </div>
-          <span className="user-name">{user.email}</span>
+        <div className="profile-menu" ref={profileWrapRef}>
+          <button
+            type="button"
+            className={`user-chip-trigger${profileOpen ? ' user-chip-trigger--open' : ''}${activeTab === 'settings' ? ' user-chip-trigger--settings' : ''}`}
+            aria-expanded={profileOpen}
+            aria-haspopup="menu"
+            id="profile-menu-trigger"
+            onClick={onProfileToggle}
+          >
+            <div className="user-avatar" aria-hidden>
+              {(displayEmail?.[0] ?? 'U').toUpperCase()}
+            </div>
+            <span className="user-name">{displayEmail}</span>
+            <ChevronDown
+              size={16}
+              className={`user-chip-trigger__caret${profileOpen ? ' user-chip-trigger__caret--open' : ''}`}
+              aria-hidden
+            />
+          </button>
+          {profileOpen && (
+            <div className="profile-menu__dropdown" role="menu" aria-labelledby="profile-menu-trigger">
+              <div className="profile-menu__header">
+                <p className="profile-menu__hint">Signed in as</p>
+                <p className="profile-menu__email">{displayEmail}</p>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                className={`profile-menu__item${activeTab === 'settings' ? ' profile-menu__item--active' : ''}`}
+                onClick={onProfileSettings}
+              >
+                <Settings size={17} aria-hidden />
+                Settings
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="profile-menu__item profile-menu__item--danger"
+                onClick={onProfileLogout}
+              >
+                <LogOut size={17} aria-hidden />
+                Log out
+              </button>
+            </div>
+          )}
         </div>
         <button className="hamburger" onClick={onMobileToggle} aria-label="Toggle menu">
           {mobileOpen ? <X size={19} /> : <Menu size={19} />}
@@ -464,32 +504,88 @@ function TopNav({
 // ══════════════════════════════════════════════════════════════════════════════
 // Mobile Menu
 // ══════════════════════════════════════════════════════════════════════════════
+const MOBILE_NAV_ICONS: Record<Tab, React.ComponentType<{ size?: number }>> = {
+  analyze: ScanSearch,
+  history: History,
+  reports: BarChart3,
+  settings: Settings,
+}
+
 function MobileMenu({
   open,
   activeTab,
   onTabChange,
   onLogout,
+  onClose,
 }: {
   open: boolean
   activeTab: Tab
   onTabChange: (t: Tab) => void
   onLogout: () => void
+  onClose: () => void
 }) {
+  useEffect(() => {
+    if (!open) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [open])
+
+  const items: { id: Tab; label: string }[] = [
+    ...MAIN_NAV_TABS,
+    { id: 'settings', label: 'Settings' },
+  ]
+
   return (
-    <div className={`mobile-menu${open ? ' mobile-menu--open' : ''}`}>
-      {NAV_TABS.map((tab) => (
-        <button
-          key={tab.id}
-          className={`mobile-menu-item${activeTab === tab.id ? ' mobile-menu-item--active' : ''}`}
-          onClick={() => onTabChange(tab.id)}
-        >
-          {tab.label}
-        </button>
-      ))}
-      <button className="mobile-menu-item mobile-menu-item--danger" onClick={onLogout}>
-        Log out
-      </button>
-    </div>
+    <>
+      <div
+        className={`mobile-menu-backdrop${open ? ' mobile-menu-backdrop--open' : ''}`}
+        onClick={onClose}
+        aria-hidden
+      />
+      <aside
+        className={`mobile-menu${open ? ' mobile-menu--open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+      >
+        <div className="mobile-menu__head">
+          <span className="mobile-menu__head-label">Menu</span>
+          <button className="mobile-menu__close" onClick={onClose} aria-label="Close menu">
+            <X size={18} />
+          </button>
+        </div>
+        <nav className="mobile-menu__nav">
+          {items.map((tab) => {
+            const Icon = MOBILE_NAV_ICONS[tab.id]
+            const active = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                className={`mobile-menu-item${active ? ' mobile-menu-item--active' : ''}`}
+                onClick={() => onTabChange(tab.id)}
+              >
+                <span className="mobile-menu-item__icon">
+                  <Icon size={18} />
+                </span>
+                <span className="mobile-menu-item__label">{tab.label}</span>
+                <ChevronRight size={16} className="mobile-menu-item__chevron" />
+              </button>
+            )
+          })}
+        </nav>
+        <div className="mobile-menu__footer">
+          <button className="mobile-menu-item mobile-menu-item--danger" onClick={onLogout}>
+            <span className="mobile-menu-item__icon">
+              <LogOut size={18} />
+            </span>
+            <span className="mobile-menu-item__label">Log out</span>
+          </button>
+        </div>
+      </aside>
+    </>
   )
 }
 
@@ -911,8 +1007,12 @@ function formatDocTypeUi(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+type HistoryFilter = 'all' | RiskLevel
+
 function HistoryTab({ user }: { user: User }) {
   const { items, error, loading } = useUserAnalyses(user.uid)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<HistoryFilter>('all')
 
   if (!isFirebaseConfigured) {
     return (
@@ -969,50 +1069,159 @@ function HistoryTab({ user }: { user: User }) {
     )
   }
 
+  const counts = {
+    all: rows.length,
+    low: rows.filter((r) => r.risk_level === 'low').length,
+    medium: rows.filter((r) => r.risk_level === 'medium').length,
+    high: rows.filter((r) => r.risk_level === 'high').length,
+  }
+
+  const filtered = rows.filter((row) => {
+    if (filter !== 'all' && row.risk_level !== filter) return false
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      return (
+        row.fileName.toLowerCase().includes(q) ||
+        row.summary.toLowerCase().includes(q) ||
+        row.document_type.toLowerCase().includes(q)
+      )
+    }
+    return true
+  })
+
+  const filterChips: { id: HistoryFilter; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'low', label: 'Low' },
+    { id: 'medium', label: 'Medium' },
+    { id: 'high', label: 'High' },
+  ]
+
   return (
     <div className="analyze-tab history-tab">
-      <header className="history-header">
-        <h2 className="history-title">Recent analyses</h2>
-        <p className="history-sub">{rows.length} saved {rows.length === 1 ? 'result' : 'results'}</p>
+      <header className="history-hero">
+        <div className="history-hero__main">
+          <span className="history-hero__eyebrow">
+            <History size={13} /> Activity log
+          </span>
+          <h2 className="history-title">Analysis history</h2>
+          <p className="history-sub">
+            {rows.length} saved {rows.length === 1 ? 'result' : 'results'} · {counts.high} high-risk
+          </p>
+        </div>
+        <div className="history-hero__stats">
+          <div className="history-hero__stat">
+            <span className="history-hero__stat-dot history-hero__stat-dot--low" />
+            <span className="history-hero__stat-num">{counts.low}</span>
+            <span className="history-hero__stat-label">Low</span>
+          </div>
+          <div className="history-hero__stat">
+            <span className="history-hero__stat-dot history-hero__stat-dot--medium" />
+            <span className="history-hero__stat-num">{counts.medium}</span>
+            <span className="history-hero__stat-label">Med</span>
+          </div>
+          <div className="history-hero__stat">
+            <span className="history-hero__stat-dot history-hero__stat-dot--high" />
+            <span className="history-hero__stat-num">{counts.high}</span>
+            <span className="history-hero__stat-label">High</span>
+          </div>
+        </div>
       </header>
-      <ul className="history-list">
-        {rows.map((row) => (
-          <li key={row.id} className="history-item preview-card">
-            <div className="history-item__top">
-              <div>
-                <p className="preview-name">{row.fileName}</p>
-                <p className="history-item__meta">
-                  <Calendar size={13} aria-hidden />
-                  {row.createdAt
-                    ? new Intl.DateTimeFormat(undefined, {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      }).format(row.createdAt)
-                    : 'Date unknown'}
-                </p>
+
+      <div className="history-toolbar">
+        <div className="history-search">
+          <Search size={15} aria-hidden />
+          <input
+            type="search"
+            placeholder="Search by name, summary, or type…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search analyses"
+          />
+        </div>
+        <div className="history-filter">
+          <Filter size={13} aria-hidden />
+          <div className="history-filter__pills">
+            {filterChips.map((chip) => (
+              <button
+                key={chip.id}
+                className={`history-filter__pill${filter === chip.id ? ' history-filter__pill--active' : ''}`}
+                onClick={() => setFilter(chip.id)}
+              >
+                {chip.label}
+                <span className="history-filter__count">{counts[chip.id]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="history-empty">
+          <Search size={22} />
+          <p>No results match your filters.</p>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setQuery('')
+              setFilter('all')
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        <ul className="history-list">
+          {filtered.map((row, idx) => (
+            <li
+              key={row.id}
+              className={`history-item history-item--${row.risk_level}`}
+              style={{ animationDelay: `${Math.min(idx * 40, 320)}ms` }}
+            >
+              <div className="history-item__rail" aria-hidden />
+              <div className="history-item__icon" aria-hidden>
+                <FileText size={18} />
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center' }}>
-                <span className="doc-type-badge">{formatDocTypeUi(row.document_type)}</span>
-                <span
-                  className={
-                    row.risk_level === 'low'
-                      ? 'risk-pill risk-pill--low'
-                      : row.risk_level === 'medium'
-                        ? 'risk-pill risk-pill--medium'
-                        : 'risk-pill risk-pill--high'
-                  }
-                >
-                  {row.risk_level}
-                </span>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Score {row.risk_score}
-                </span>
+              <div className="history-item__body">
+                <div className="history-item__head">
+                  <p className="history-item__name">{row.fileName}</p>
+                  <span
+                    className={
+                      row.risk_level === 'low'
+                        ? 'risk-pill risk-pill--low'
+                        : row.risk_level === 'medium'
+                          ? 'risk-pill risk-pill--medium'
+                          : 'risk-pill risk-pill--high'
+                    }
+                  >
+                    {row.risk_level}
+                  </span>
+                </div>
+                <p className="history-item__summary">{row.summary}</p>
+                <div className="history-item__foot">
+                  <span className="history-item__chip">
+                    <Layers size={12} aria-hidden />
+                    {formatDocTypeUi(row.document_type)}
+                  </span>
+                  <span className="history-item__chip">
+                    <Calendar size={12} aria-hidden />
+                    {row.createdAt
+                      ? new Intl.DateTimeFormat(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(row.createdAt)
+                      : 'Date unknown'}
+                  </span>
+                  <span className="history-item__chip history-item__chip--score">
+                    <Activity size={12} aria-hidden />
+                    Score {(row.risk_score / 10).toFixed(1)}/10
+                  </span>
+                </div>
               </div>
-            </div>
-            <p className="history-item__summary">{row.summary}</p>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -1074,73 +1283,201 @@ function ReportsTab({ user }: { user: User }) {
 
   const riskLevels: RiskLevel[] = ['low', 'medium', 'high']
   const docEntries = Object.entries(report.byType).sort((a, b) => b[1] - a[1])
+  const maxDocCount = docEntries.reduce((m, [, c]) => Math.max(m, c), 0)
+
+  // Donut math
+  const donutR = 56
+  const donutC = 2 * Math.PI * donutR
+  let donutOffset = 0
+  const donutSegments = riskLevels
+    .map((level) => {
+      const count = report.riskCounts[level]
+      const pct = report.total > 0 ? count / report.total : 0
+      const dash = pct * donutC
+      const seg = {
+        level,
+        dash,
+        offset: donutOffset,
+        count,
+        pct: Math.round(pct * 100),
+      }
+      donutOffset += dash
+      return seg
+    })
+    .filter((s) => s.dash > 0)
 
   return (
     <div className="analyze-tab reports-tab">
-      <header className="history-header">
-        <h2 className="history-title">Your reports</h2>
-        <p className="history-sub">Totals from analyses saved to your account ({report.total} total).</p>
+      <header className="reports-hero">
+        <div className="reports-hero__intro">
+          <span className="reports-hero__eyebrow">
+            <Sparkles size={13} /> Insights
+          </span>
+          <h2 className="history-title">Your reports</h2>
+          <p className="history-sub">
+            Trends across {report.total} {report.total === 1 ? 'analysis' : 'analyses'} saved to your account.
+          </p>
+        </div>
       </header>
 
-      <section className="admin-metrics" style={{ marginBottom: '1.25rem' }}>
-        <article className="admin-metric-card">
-          <p className="admin-metric-card__label">Total analyses</p>
-          <p className="admin-metric-card__value">{report.total}</p>
+      <section className="metric-grid">
+        <article className="metric-card metric-card--accent">
+          <div className="metric-card__head">
+            <span className="metric-card__icon">
+              <ClipboardList size={16} />
+            </span>
+            <p className="metric-card__label">Total analyses</p>
+          </div>
+          <p className="metric-card__value">{report.total}</p>
+          <p className="metric-card__hint">Lifetime documents</p>
         </article>
-        <article className="admin-metric-card">
-          <p className="admin-metric-card__label">Avg risk score</p>
-          <p className="admin-metric-card__value">{report.avgRisk}</p>
-          <p className="admin-metric-card__hint">0–100</p>
+        <article className="metric-card">
+          <div className="metric-card__head">
+            <span className="metric-card__icon metric-card__icon--violet">
+              <TrendingUp size={16} />
+            </span>
+            <p className="metric-card__label">Avg risk score</p>
+          </div>
+          <p className="metric-card__value">
+            {(report.avgRisk / 10).toFixed(1)}
+            <span className="metric-card__unit">/10</span>
+          </p>
+          <p className="metric-card__hint">{report.avgRisk}/100 raw</p>
         </article>
-        <article className="admin-metric-card">
-          <p className="admin-metric-card__label">Avg confidence</p>
-          <p className="admin-metric-card__value">{report.avgConfidence}</p>
-          <p className="admin-metric-card__hint">Model certainty</p>
+        <article className="metric-card">
+          <div className="metric-card__head">
+            <span className="metric-card__icon metric-card__icon--teal">
+              <Activity size={16} />
+            </span>
+            <p className="metric-card__label">Avg confidence</p>
+          </div>
+          <p className="metric-card__value">
+            {report.avgConfidence}
+            <span className="metric-card__unit">%</span>
+          </p>
+          <p className="metric-card__hint">Model certainty</p>
         </article>
-        <article className="admin-metric-card">
-          <p className="admin-metric-card__label">High-risk share</p>
-          <p className="admin-metric-card__value">{report.highPct}%</p>
-          <p className="admin-metric-card__hint">{report.riskCounts.high} flagged high</p>
+        <article className={`metric-card${report.highPct >= 30 ? ' metric-card--danger' : ''}`}>
+          <div className="metric-card__head">
+            <span className="metric-card__icon metric-card__icon--danger">
+              <ShieldAlert size={16} />
+            </span>
+            <p className="metric-card__label">High-risk share</p>
+          </div>
+          <p className="metric-card__value">
+            {report.highPct}
+            <span className="metric-card__unit">%</span>
+          </p>
+          <p className="metric-card__hint">{report.riskCounts.high} flagged high</p>
         </article>
       </section>
 
-      <section className="admin-panel">
-        <h3 className="admin-panel__title">Risk distribution</h3>
-        <div className="admin-chart">
-          {riskLevels.map((level) => {
-            const count = report.riskCounts[level]
-            const pct = report.total > 0 ? (count / report.total) * 100 : 0
-            return (
-              <div key={level} className="admin-chart__row">
-                <span className="admin-chart__label">{level}</span>
-                <div className="admin-chart__track">
-                  <span
-                    className={`admin-chart__fill admin-chart__fill--${level}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span className="admin-chart__count">{count}</span>
-              </div>
-            )
-          })}
-        </div>
-      </section>
+      <div className="reports-row">
+        <section className="reports-panel reports-panel--donut">
+          <div className="reports-panel__head">
+            <h3 className="reports-panel__title">Risk distribution</h3>
+            <p className="reports-panel__sub">Share of analyses by risk level</p>
+          </div>
+          <div className="donut-wrap">
+            <svg viewBox="0 0 160 160" className="donut" aria-label="Risk distribution donut">
+              <circle
+                cx="80"
+                cy="80"
+                r={donutR}
+                fill="none"
+                stroke="var(--surface-2)"
+                strokeWidth="16"
+              />
+              {donutSegments.map((seg) => (
+                <circle
+                  key={seg.level}
+                  cx="80"
+                  cy="80"
+                  r={donutR}
+                  fill="none"
+                  stroke={
+                    seg.level === 'low'
+                      ? 'var(--risk-low)'
+                      : seg.level === 'medium'
+                        ? 'var(--risk-medium)'
+                        : 'var(--risk-high)'
+                  }
+                  strokeWidth="16"
+                  strokeLinecap="butt"
+                  strokeDasharray={`${seg.dash} ${donutC - seg.dash}`}
+                  strokeDashoffset={-seg.offset}
+                  transform="rotate(-90 80 80)"
+                  style={{ transition: 'stroke-dasharray 0.6s ease' }}
+                />
+              ))}
+              <text
+                x="80"
+                y="76"
+                textAnchor="middle"
+                fill="var(--text-h)"
+                fontSize="22"
+                fontWeight="800"
+                fontFamily="Inter, sans-serif"
+              >
+                {report.total}
+              </text>
+              <text
+                x="80"
+                y="96"
+                textAnchor="middle"
+                fill="var(--text-muted)"
+                fontSize="10"
+                fontWeight="600"
+                fontFamily="Inter, sans-serif"
+                letterSpacing="1.2"
+              >
+                TOTAL
+              </text>
+            </svg>
+            <ul className="donut-legend">
+              {riskLevels.map((level) => {
+                const count = report.riskCounts[level]
+                const pct = report.total > 0 ? Math.round((count / report.total) * 100) : 0
+                return (
+                  <li key={level} className={`donut-legend__row donut-legend__row--${level}`}>
+                    <span className="donut-legend__dot" />
+                    <span className="donut-legend__label">{level}</span>
+                    <span className="donut-legend__count">{count}</span>
+                    <span className="donut-legend__pct">{pct}%</span>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </section>
 
-      <section className="admin-panel">
-        <h3 className="admin-panel__title">Document types</h3>
-        {docEntries.length === 0 ? (
-          <p className="admin-subtitle">No type breakdown.</p>
-        ) : (
-          <ul className="admin-doc-list">
-            {docEntries.map(([type, count]) => (
-              <li key={type} className="admin-doc-item">
-                <span className="admin-doc-item__name">{formatDocTypeUi(type)}</span>
-                <span className="admin-doc-item__count">{count}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <section className="reports-panel">
+          <div className="reports-panel__head">
+            <h3 className="reports-panel__title">Document types</h3>
+            <p className="reports-panel__sub">Most analyzed categories</p>
+          </div>
+          {docEntries.length === 0 ? (
+            <p className="admin-subtitle">No type breakdown.</p>
+          ) : (
+            <ul className="doc-bars">
+              {docEntries.map(([type, count]) => {
+                const pct = maxDocCount > 0 ? (count / maxDocCount) * 100 : 0
+                return (
+                  <li key={type} className="doc-bar">
+                    <div className="doc-bar__head">
+                      <span className="doc-bar__name">{formatDocTypeUi(type)}</span>
+                      <span className="doc-bar__count">{count}</span>
+                    </div>
+                    <div className="doc-bar__track">
+                      <span className="doc-bar__fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
 
       <p className="history-footnote">
         Figures update when you finish new analyses — data is stored in{' '}

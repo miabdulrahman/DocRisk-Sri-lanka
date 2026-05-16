@@ -13,20 +13,39 @@
 }
 
 .scam-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
   border-radius: var(--radius);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 16px 44px -28px rgba(0, 0, 0, 0.38);
   transition: border-color 0.25s ease, background 0.35s ease, box-shadow 0.25s ease;
   animation: cardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+[data-theme='light'] .scam-card {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 14px 40px -24px rgba(15, 23, 42, 0.1);
+}
+
 .scam-card:hover {
   border-color: var(--accent-border);
-  box-shadow: 0 0 0 1px var(--accent-border), 0 6px 24px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 0 0 1px var(--accent-border),
+    0 20px 50px -28px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme='light'] .scam-card:hover {
+  box-shadow:
+    0 0 0 1px var(--accent-border),
+    0 18px 44px -26px rgba(15, 23, 42, 0.14);
 }
 
 .scam-card__top {
