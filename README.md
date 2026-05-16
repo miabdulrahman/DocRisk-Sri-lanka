@@ -23,14 +23,19 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-## Firebase (optional)
+## Firebase authentication
 
-1. Create a Firebase project and enable **Google** sign-in under Authentication.
-2. Enable **Firestore** and deploy rules from `firestore.rules`.
-3. Fill `client/.env` with your web app config (`VITE_FIREBASE_*`).
-4. For protected API: set `FIREBASE_PROJECT_ID` and `GOOGLE_APPLICATION_CREDENTIALS` in `server/.env`.
+1. [Create a Firebase project](https://console.firebase.google.com/) and add a **Web app**.
+2. Under **Authentication → Sign-in method**, enable **Email/Password** and **Google**.
+3. Copy `client/.env.example` → `client/.env` and paste your `VITE_FIREBASE_*` values.
+4. Enable **Firestore** and deploy rules: `firebase deploy --only firestore:rules` (uses `firestore.rules`).
+5. Restart the client: `npm run dev` in `client`.
 
-Without Firebase config, the app runs in local mode (no sign-in, analyses are not saved).
+When Firebase is configured, users see a **login screen** (email/password or Google) before uploading documents. Results are saved to Firestore per user.
+
+**Optional API protection:** set `FIREBASE_PROJECT_ID` and `GOOGLE_APPLICATION_CREDENTIALS` in `server/.env` so `/api/analyze` requires a valid Firebase ID token.
+
+Without Firebase keys in `client/.env`, the app runs in **local mode** (no sign-in; a setup notice is shown).
 
 ## API
 

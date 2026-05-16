@@ -1,0 +1,48 @@
+.firebase-setup {
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--accent-border);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.firebase-setup h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.firebase-setup p {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.firebase-setup ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.firebase-setup a {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.firebase-setup code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.firebase-setup__note {
+  margin: 0 !important;
+  font-size: 0.85rem;
+  font-style: italic;
+}
