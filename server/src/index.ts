@@ -192,26 +192,41 @@ app.post(
 
       let response;
       try {
-        response = await ai.models.generateContent({
-          model: geminiModel,
-          contents: [
-            {
-              inlineData: {
-                data: audioBase64,
-                mimeType: normalizedMime,
+        const callGemini = () =>
+          ai.models.generateContent({
+            model: geminiModel,
+            contents: [
+              {
+                inlineData: {
+                  data: audioBase64,
+                  mimeType: normalizedMime,
+                },
               },
+              {
+                text: "Perform a forensic acoustic analysis of this audio clip and return ONLY the JSON object defined by the schema.",
+              },
+            ],
+            config: {
+              systemInstruction: AUDIO_FORENSIC_SYSTEM_INSTRUCTION,
+              temperature: 0.2,
+              maxOutputTokens: 2000,
+              responseMimeType: "application/json",
             },
-            {
-              text: "Perform a forensic acoustic analysis of this audio clip and return ONLY the JSON object defined by the schema.",
-            },
-          ],
-          config: {
-            systemInstruction: AUDIO_FORENSIC_SYSTEM_INSTRUCTION,
-            temperature: 0.2,
-            maxOutputTokens: 900,
-            responseMimeType: "application/json",
-          },
-        });
+          });
+
+        try {
+          response = await callGemini();
+        } catch (firstErr) {
+          const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+          // Retry once on transient network errors (ECONNRESET, socket hang up, etc.)
+          if (msg.toLowerCase().includes("econnreset") || msg.toLowerCase().includes("socket") || msg.toLowerCase().includes("fetch failed")) {
+            console.warn("[/api/analyze-audio] transient error, retrying once…", msg);
+            await new Promise((r) => setTimeout(r, 1200));
+            response = await callGemini();
+          } else {
+            throw firstErr;
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
