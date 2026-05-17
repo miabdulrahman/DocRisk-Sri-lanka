@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: docrisk-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: FIREBASE_PROJECT_ID
+        value: docrisk-sri-lanka
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS
+        value: "https://doc-risk-sri-lanka.vercel.app,*.vercel.app,http://localhost:5173"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false

@@ -18,11 +18,24 @@ export function initFirebaseAdmin(): boolean {
   try {
     if (!admin.apps.length) {
       const credEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+      const inlineJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
 
       let credentialUsed = "application-default";
       let credentialInstance: admin.credential.Credential;
 
-      if (credEnv) {
+      if (inlineJson) {
+        try {
+          const parsed = JSON.parse(inlineJson);
+          credentialInstance = admin.credential.cert(parsed as admin.ServiceAccount);
+          credentialUsed = "FIREBASE_SERVICE_ACCOUNT_JSON";
+        } catch (e) {
+          credentialInstance = admin.credential.applicationDefault();
+          console.warn(
+            "[firebase-admin] FIREBASE_SERVICE_ACCOUNT_JSON could not be parsed; falling back to application default.",
+            e,
+          );
+        }
+      } else if (credEnv) {
         const credPath = resolveCredentialPath(credEnv);
         if (existsSync(credPath)) {
           try {
