@@ -58,15 +58,22 @@ const corsAllowlist = (process.env.CORS_ORIGINS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Pre-check: allow all *.vercel.app if wildcard is in the list
+const allowAllVercel = corsAllowlist.some(
+  (s) => s === "*.vercel.app" || s === "https://*.vercel.app",
+);
+
 app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
       if (corsAllowlist.length === 0) return cb(null, true);
       if (corsAllowlist.includes(origin)) return cb(null, true);
-      if (corsAllowlist.includes("*.vercel.app") && /\.vercel\.app$/i.test(new URL(origin).hostname)) {
-        return cb(null, true);
-      }
+      try {
+        if (allowAllVercel && /\.vercel\.app$/i.test(new URL(origin).hostname)) {
+          return cb(null, true);
+        }
+      } catch { /* ignore invalid origins */ }
       return cb(new Error(`CORS blocked for origin ${origin}`));
     },
     credentials: true,
