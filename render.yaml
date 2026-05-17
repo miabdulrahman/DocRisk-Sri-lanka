@@ -1,24 +1,28 @@
 services:
+  # ─── Backend API ───────────────────────────────
   - type: web
-    name: docrisk-server
+    name: docrisk-voice-api
     runtime: node
     plan: free
-    buildCommand: cd server && npm install
-    startCommand: cd server && npm start
-    healthCheckPath: /api/health
-    autoDeploy: true
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash-lite
-      - key: FIREBASE_PROJECT_ID
-        value: docrisk-sri-lanka
-      - key: RATE_LIMIT_ENABLED
-        value: "true"
-      - key: CORS_ORIGINS
-        value: "https://doc-risk-sri-lanka.vercel.app,https://*.vercel.app,http://localhost:5173"
       - key: GEMINI_API_KEY
         sync: false
-      - key: FIREBASE_SERVICE_ACCOUNT_JSON
-        sync: false
+      - key: PORT
+        value: 3000
+
+  # ─── Frontend ──────────────────────────────────
+  - type: web
+    name: docrisk-frontend
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
