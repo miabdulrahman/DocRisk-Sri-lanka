@@ -1,11 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd client && npm install && npm run build",
+  "buildCommand": "npm install --prefix server && cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "installCommand": "echo skip-root-install",
   "framework": null,
+  "functions": {
+    "api/[...path].ts": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
-    { "source": "/((?!assets/|sw.js|manifest.webmanifest|icons/|favicon.svg|robots.txt).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/[...path]" },
+    {
+      "source": "/((?!assets/|sw.js|manifest.webmanifest|icons/|favicon.svg|robots.txt).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
