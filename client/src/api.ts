@@ -1,5 +1,5 @@
 import type { AnalyzeApiResponse } from './types'
-import { getApiBase } from './lib/apiBase'
+import { apiFetch, getApiBase } from './lib/apiBase'
 
 export const API_URL = `${getApiBase()}/api/analyze`
 
@@ -24,7 +24,7 @@ export async function analyzeDocument(
 
   let res: Response
   try {
-    res = await fetch(API_URL, {
+    res = await apiFetch(API_URL, {
       method: 'POST',
       body: formData,
       headers: {

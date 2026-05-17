@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getApiBase } from '../lib/apiBase'
+import { apiFetch, getApiBase } from '../lib/apiBase'
 import type { ScamEntry } from '../utils/scamData'
 
 interface TrendingScamsPayload {
@@ -96,7 +96,7 @@ export function useOfficialScams() {
 
     const task = (async () => {
       try {
-        const res = await fetch(`${getApiBase()}/api/trending-scams`)
+        const res = await apiFetch(`${getApiBase()}/api/trending-scams`)
         const raw = await res.text()
         const data = parseJsonResponse(raw, res.status)
 

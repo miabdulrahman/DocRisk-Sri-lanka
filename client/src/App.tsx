@@ -52,7 +52,7 @@ import GuardianHistory from './pages/GuardianHistory'
 import MemberCheckPage from './pages/MemberCheckPage'
 import { LanguageSelector } from './components/LanguageSelector'
 import { Dashboard, type AnalysisCompletePayload } from './pages/Dashboard'
-import { getApiBase } from './lib/apiBase'
+import { apiFetch, getApiBase } from './lib/apiBase'
 import { ScamCard } from './components/ScamCard'
 import { ScamChatModal } from './components/ScamChatModal'
 import type { ScamEntry } from './utils/scamData'
@@ -949,7 +949,7 @@ function AudioTab() {
       const form = new FormData()
       form.append('audio', file)
       const base = getApiBase()
-      const res = await fetch(`${base}/api/analyze-audio`, {
+      const res = await apiFetch(`${base}/api/analyze-audio`, {
         method: 'POST',
         body: form,
       })

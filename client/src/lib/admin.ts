@@ -1,5 +1,5 @@
 import type { AdminStatsResponse } from '../types'
-import { getApiBase } from './apiBase'
+import { apiFetch, getApiBase } from './apiBase'
 
 export type AdminGateResult =
   | { allowed: true }
@@ -11,7 +11,7 @@ export type AdminGateResult =
 export async function verifyAdminGate(idToken: string): Promise<AdminGateResult> {
   try {
     const url = `${getApiBase()}/api/admin/check`
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       headers: { Authorization: `Bearer ${idToken}` },
     })
     let data = {} as {
@@ -75,7 +75,7 @@ export async function checkIsAdmin(idToken: string): Promise<boolean> {
 
 export async function fetchAdminStats(token: string): Promise<AdminStatsResponse> {
   const url = `${getApiBase()}/api/admin/stats`
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
