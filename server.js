@@ -19,7 +19,3 @@ proc.on('error', (err) => {
   console.error('[server.js] Failed to start server process:', err.message);
   process.exit(1);
 });
-
-app.use(cors({
-  origin: "https://docrisk-frontend.onrender.com"
-}));

@@ -4,21 +4,22 @@ services:
     name: docrisk-voice-api
     runtime: node
     plan: free
-    buildCommand: npm install && cd server && npm install
+    rootDir: backend
+    buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /api/health
+    healthCheckPath: /health
     envVars:
       - key: GEMINI_API_KEY
         sync: false
       - key: PORT
-        value: 4000
+        value: 3000
 
   # ─── Frontend ──────────────────────────────────
   - type: web
     name: docrisk-frontend
     runtime: static
     plan: free
-    rootDir: client
+    rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
