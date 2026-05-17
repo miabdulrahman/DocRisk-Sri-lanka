@@ -2,10 +2,9 @@ services:
   - type: web
     name: docrisk-server
     runtime: node
-    rootDir: server
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
