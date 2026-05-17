@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: docrisk-server
+    name: docrisk-sri-lanka
     runtime: node
     plan: free
     buildCommand: npm install
