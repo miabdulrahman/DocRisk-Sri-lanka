@@ -164,21 +164,39 @@ export async function analyzeDocument(
 
   let response;
   try {
-    response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        documentContent,
-        {
-          text: `${langInstruction}\n\nAnalyze this document and return the JSON result.`,
+    const callGemini = () =>
+      ai.models.generateContent({
+        model: modelName,
+        contents: [
+          documentContent,
+          {
+            text: `${langInstruction}\n\nAnalyze this document and return the JSON result.`,
+          },
+        ],
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          temperature,
+          maxOutputTokens,
+          responseMimeType: "application/json",
         },
-      ],
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        temperature,
-        maxOutputTokens,
-        responseMimeType: "application/json",
-      },
-    });
+      });
+
+    try {
+      response = await callGemini();
+    } catch (firstErr) {
+      const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      if (
+        msg.toLowerCase().includes("econnreset") ||
+        msg.toLowerCase().includes("socket") ||
+        msg.toLowerCase().includes("fetch failed")
+      ) {
+        console.warn("[analyzeDocument] transient error, retrying once…", msg);
+        await new Promise((r) => setTimeout(r, 1200));
+        response = await callGemini();
+      } else {
+        throw firstErr;
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("404") && msg.includes("not found")) {
