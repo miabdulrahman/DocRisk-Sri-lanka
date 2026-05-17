@@ -5,7 +5,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { IconFile, IconLink } from '@tabler/icons-react'
 import { ChevronLeft, History } from 'lucide-react'
 import { db, isFirebaseConfigured } from '../lib/firebase'
-import { getApiBase } from '../lib/apiBase'
+import { apiFetch, getApiBase } from '../lib/apiBase'
 import type { CircleMember, RiskLevel } from '../types'
 
 const REL_LABEL: Record<CircleMember['relationship'], string> = {
@@ -131,7 +131,7 @@ export default function GuardianHistory({ user }: { user: User }) {
       if (riskFilter) params.set('riskLevel', riskFilter)
 
       const base = getApiBase()
-      const res = await fetch(`${base}/api/guardian/history?${params.toString()}`, {
+      const res = await apiFetch(`${base}/api/guardian/history?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = (await res.json()) as ApiResponse

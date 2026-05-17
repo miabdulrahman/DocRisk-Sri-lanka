@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, MessageCircle, Send, User, X } from 'lucide-react'
 import type { ScamEntry } from '../utils/scamData'
-import { getApiBase } from '../lib/apiBase'
+import { apiFetch, getApiBase } from '../lib/apiBase'
 import './ScamCard.css'
 import './ScamChatModal.css'
 
@@ -76,7 +76,7 @@ export function ScamChatModal({ scam, onClose }: Props) {
     const chatUrl = `${getApiBase()}/api/chat-with-expert`
 
     try {
-      const res = await fetch(chatUrl, {
+      const res = await apiFetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

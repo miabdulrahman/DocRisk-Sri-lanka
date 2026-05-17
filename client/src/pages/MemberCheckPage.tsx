@@ -10,7 +10,7 @@ import {
 import { IconAlertCircle, IconAlertTriangle, IconCamera, IconCircleCheck, IconLink } from '@tabler/icons-react'
 import { ShieldCheck } from 'lucide-react'
 import { db, isFirebaseConfigured } from '../lib/firebase'
-import { getApiBase } from '../lib/apiBase'
+import { apiFetch, getApiBase } from '../lib/apiBase'
 import type { AnalysisResult } from '../types'
 import '../member-check.css'
 
@@ -48,7 +48,7 @@ type MemberContext = {
 async function fetchMemberContextApi(token: string): Promise<MemberContext | null> {
   const base = getApiBase()
   const url = `${base}/api/guardian/member-context?token=${encodeURIComponent(token)}`
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   const data = (await res.json()) as {
     success?: boolean
     guardianId?: string
@@ -383,7 +383,7 @@ export default function MemberCheckPage() {
       setResult(null)
       try {
         const base = getApiBase()
-        const res = await fetch(`${base}/api/guardian/check`, {
+        const res = await apiFetch(`${base}/api/guardian/check`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
