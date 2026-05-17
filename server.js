@@ -8,17 +8,6 @@ const path = require('path');
 const serverDir = path.join(__dirname, 'server');
 const tsx = path.join(serverDir, 'node_modules', '.bin', 'tsx');
 
-app.get("/", (_, res) => {
-  res.json({
-    service: "DocRisk Voice Verification API",
-    version: "1.0.0",
-    endpoints: {
-      health: "GET /health",
-      verify: "POST /api/voice/verify"
-    }
-  });
-});
-
 const proc = spawn(tsx, ['src/index.ts'], {
   cwd: serverDir,
   stdio: 'inherit',
