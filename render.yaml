@@ -17,7 +17,7 @@ services:
       - key: RATE_LIMIT_ENABLED
         value: "true"
       - key: CORS_ORIGINS
-        value: "https://doc-risk-sri-lanka.vercel.app,*.vercel.app,http://localhost:5173"
+        value: "https://doc-risk-sri-lanka.vercel.app,https://*.vercel.app,http://localhost:5173"
       - key: GEMINI_API_KEY
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON

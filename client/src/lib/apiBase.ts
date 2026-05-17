@@ -1,21 +1,19 @@
 /**
  * Base URL for the Express API (no trailing slash).
- * In dev, prefer same-origin `/api` so Vite's proxy routes traffic correctly even when you open
- * the app via a LAN IP (otherwise hard-coded localhost hits the wrong machine).
+ *
+ * - Dev: empty string so Vite's proxy handles /api/* on any LAN IP
+ * - Production: VITE_API_URL must be set to the Render backend URL
+ *   e.g. https://docrisk-server.onrender.com
  */
 export function getApiBase(): string {
-  if (import.meta.env.DEV) {
-    return ''
-  }
-
-  const raw = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api/analyze'
-  const base = raw.replace(/\/api\/analyze\/?$/, '').replace(/\/$/, '')
-  return base || 'http://localhost:4000'
+  if (import.meta.env.DEV) return ''
+  const raw = (import.meta.env.VITE_API_URL ?? '').trim()
+  return raw.replace(/\/$/, '')
 }
 
 /**
- * Thin fetch wrapper — automatically injects the localtunnel bypass header
- * when the API base is a loca.lt tunnel URL, so the tunnel interstitial is skipped.
+ * Thin fetch wrapper — injects the localtunnel bypass header
+ * when the API base is a tunnel URL so the interstitial is skipped.
  */
 export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const base = getApiBase()
